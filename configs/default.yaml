@@ -1,0 +1,33 @@
+# Experiment configuration
+experiment:
+  name: "pick_cube"
+  base_dir: "runs"  # Outputs go to {base_dir}/{name}/{timestamp}/
+
+# Training parameters
+training:
+  timesteps: 500000
+  eval_freq: 10000
+  save_freq: 10000
+  seed: 42
+
+# SAC hyperparameters
+sac:
+  learning_rate: 3.0e-4
+  buffer_size: 100000
+  learning_starts: 1000
+  batch_size: 256
+  tau: 0.005
+  gamma: 0.99
+  train_freq: 1
+  gradient_steps: 1
+
+# Environment
+env:
+  normalize_obs: true
+  normalize_reward: true
+
+# Evaluation/recording
+eval:
+  episodes: 5
+  video_width: 640
+  video_height: 480

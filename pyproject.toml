@@ -16,6 +16,7 @@ dependencies = [
     "tensorboard>=2.14.0",
     "tqdm>=4.65.0",
     "rich>=13.0.0",
+    "pyyaml>=6.0.3",
 ]
 
 [tool.uv.sources]

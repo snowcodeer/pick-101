@@ -1,13 +1,22 @@
 """Train a pick-and-place policy using SAC."""
 import argparse
+import shutil
+from datetime import datetime
 from pathlib import Path
 
 import torch
+import yaml
 from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from envs.pick_cube import PickCubeEnv
+
+
+def load_config(config_path: str) -> dict:
+    """Load YAML config file."""
+    with open(config_path) as f:
+        return yaml.safe_load(f)
 
 
 def make_env():
@@ -17,12 +26,16 @@ def make_env():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--timesteps", type=int, default=100_000, help="Total training timesteps")
-    parser.add_argument("--eval-freq", type=int, default=5000, help="Evaluation frequency")
-    parser.add_argument("--save-freq", type=int, default=10000, help="Checkpoint save frequency")
-    parser.add_argument("--output-dir", type=str, default="runs", help="Output directory")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--config", type=str, default="configs/default.yaml", help="Path to config file")
+    parser.add_argument("--resume", type=str, default=None, help="Path to experiment dir to resume (e.g., runs/pick_cube/20241213_215500)")
     args = parser.parse_args()
+
+    # Load config
+    config = load_config(args.config)
+    exp_cfg = config["experiment"]
+    train_cfg = config["training"]
+    sac_cfg = config["sac"]
+    env_cfg = config["env"]
 
     # Check GPU
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -30,20 +43,46 @@ def main():
     if device == "cuda":
         print(f"GPU: {torch.cuda.get_device_name(0)}")
 
-    # Create output directory
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(exist_ok=True)
+    # Create output directory: {base_dir}/{name}/{timestamp}/
+    if args.resume:
+        output_dir = Path(args.resume)
+        if not output_dir.exists():
+            raise ValueError(f"Resume directory not found: {output_dir}")
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = Path(exp_cfg["base_dir"]) / exp_cfg["name"] / timestamp
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy config to output dir for reproducibility
+    if not args.resume:
+        shutil.copy(args.config, output_dir / "config.yaml")
 
     # Create environments
     env = DummyVecEnv([make_env])
-    env = VecNormalize(env, norm_obs=True, norm_reward=True)
+    vec_normalize_path = output_dir / "vec_normalize.pkl"
+
+    if args.resume and vec_normalize_path.exists():
+        env = VecNormalize.load(vec_normalize_path, env)
+        env.training = True
+        print(f"Loaded normalization stats from {vec_normalize_path}")
+    else:
+        env = VecNormalize(
+            env,
+            norm_obs=env_cfg["normalize_obs"],
+            norm_reward=env_cfg["normalize_reward"],
+        )
 
     eval_env = DummyVecEnv([make_env])
-    eval_env = VecNormalize(eval_env, norm_obs=True, norm_reward=False, training=False)
+    eval_env = VecNormalize(
+        eval_env,
+        norm_obs=env_cfg["normalize_obs"],
+        norm_reward=False,
+        training=False,
+    )
 
     # Callbacks
     checkpoint_callback = CheckpointCallback(
-        save_freq=args.save_freq,
+        save_freq=train_cfg["save_freq"],
         save_path=str(output_dir / "checkpoints"),
         name_prefix="sac_pick_cube",
     )
@@ -52,35 +91,46 @@ def main():
         eval_env,
         best_model_save_path=str(output_dir / "best_model"),
         log_path=str(output_dir / "eval_logs"),
-        eval_freq=args.eval_freq,
+        eval_freq=train_cfg["eval_freq"],
         deterministic=True,
         render=False,
     )
 
-    # Create SAC agent
-    model = SAC(
-        "MlpPolicy",
-        env,
-        learning_rate=3e-4,
-        buffer_size=100_000,
-        learning_starts=1000,
-        batch_size=256,
-        tau=0.005,
-        gamma=0.99,
-        train_freq=1,
-        gradient_steps=1,
-        verbose=1,
-        seed=args.seed,
-        device=device,
-        tensorboard_log=str(output_dir / "tensorboard"),
-    )
+    # Create or load SAC agent
+    if args.resume:
+        # Find latest checkpoint
+        checkpoints = sorted((output_dir / "checkpoints").glob("*.zip"))
+        if checkpoints:
+            latest_checkpoint = checkpoints[-1]
+            model = SAC.load(latest_checkpoint, env=env, device=device)
+            model.tensorboard_log = str(output_dir / "tensorboard")
+            print(f"Resumed from {latest_checkpoint}")
+        else:
+            raise ValueError(f"No checkpoints found in {output_dir / 'checkpoints'}")
+    else:
+        model = SAC(
+            "MlpPolicy",
+            env,
+            learning_rate=sac_cfg["learning_rate"],
+            buffer_size=sac_cfg["buffer_size"],
+            learning_starts=sac_cfg["learning_starts"],
+            batch_size=sac_cfg["batch_size"],
+            tau=sac_cfg["tau"],
+            gamma=sac_cfg["gamma"],
+            train_freq=sac_cfg["train_freq"],
+            gradient_steps=sac_cfg["gradient_steps"],
+            verbose=1,
+            seed=train_cfg["seed"],
+            device=device,
+            tensorboard_log=str(output_dir / "tensorboard"),
+        )
 
-    print(f"\nStarting training for {args.timesteps} timesteps...")
+    print(f"\nStarting training for {train_cfg['timesteps']} timesteps...")
     print(f"Output directory: {output_dir}")
 
     # Train
     model.learn(
-        total_timesteps=args.timesteps,
+        total_timesteps=train_cfg["timesteps"],
         callback=[checkpoint_callback, eval_callback],
         progress_bar=True,
     )
