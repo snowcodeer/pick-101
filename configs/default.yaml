@@ -25,6 +25,25 @@ sac:
 env:
   normalize_obs: true
   normalize_reward: true
+  max_episode_steps: 200
+  action_scale: 0.1
+
+# Reward shaping (staged rewards)
+reward:
+  # Thresholds
+  grasp_distance_threshold: 0.03  # Gripper within 3cm of cube to count as grasp
+  gripper_closed_threshold: 0.3   # Gripper joint value when "closed"
+  lift_height_threshold: 0.03     # Cube 3cm above ground to be "lifted"
+  success_threshold: 0.03         # Cube within 3cm of target for success
+
+  # Reward weights
+  reach_weight: 1.0               # Weight for reaching toward cube
+  grasp_bonus: 1.0                # Bonus for maintaining grasp
+  lift_bonus: 2.0                 # Base bonus for lifting
+  lift_height_scale: 10.0         # Scale bonus by height
+  place_weight: 2.0               # Weight for placing (when lifted)
+  success_bonus: 10.0             # Bonus for success
+  drop_penalty: 5.0               # Penalty for dropping cube
 
 # Evaluation/recording
 eval:

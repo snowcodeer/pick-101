@@ -19,9 +19,14 @@ def load_config(config_path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def make_env():
+def make_env(env_cfg: dict, reward_cfg: dict):
     """Create the environment."""
-    return PickCubeEnv(render_mode=None)
+    return PickCubeEnv(
+        render_mode=None,
+        max_episode_steps=env_cfg.get("max_episode_steps", 200),
+        action_scale=env_cfg.get("action_scale", 0.1),
+        reward_config=reward_cfg,
+    )
 
 
 def main():
@@ -36,6 +41,7 @@ def main():
     train_cfg = config["training"]
     sac_cfg = config["sac"]
     env_cfg = config["env"]
+    reward_cfg = config.get("reward", {})
 
     # Check GPU
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -58,7 +64,7 @@ def main():
         shutil.copy(args.config, output_dir / "config.yaml")
 
     # Create environments
-    env = DummyVecEnv([make_env])
+    env = DummyVecEnv([lambda: make_env(env_cfg, reward_cfg)])
     vec_normalize_path = output_dir / "vec_normalize.pkl"
 
     if args.resume and vec_normalize_path.exists():
@@ -72,7 +78,7 @@ def main():
             norm_reward=env_cfg["normalize_reward"],
         )
 
-    eval_env = DummyVecEnv([make_env])
+    eval_env = DummyVecEnv([lambda: make_env(env_cfg, reward_cfg)])
     eval_env = VecNormalize(
         eval_env,
         norm_obs=env_cfg["normalize_obs"],

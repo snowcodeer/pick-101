@@ -11,7 +11,7 @@ from gymnasium import spaces
 class PickCubeEnv(gym.Env):
     """Environment for picking a cube and placing it at a target location.
 
-    Observation space (19 dims):
+    Observation space (21 dims):
         - Joint positions (6)
         - Joint velocities (6)
         - Gripper position (3)
@@ -21,11 +21,12 @@ class PickCubeEnv(gym.Env):
     Action space (6 dims):
         - Delta joint positions for all 6 joints (continuous)
 
-    Rewards:
-        - Distance from gripper to cube (negative)
-        - Distance from cube to target (negative, weighted higher)
-        - Bonus for cube near target
-        - Penalty for dropping cube
+    Staged Rewards:
+        1. Reach: gripper approaching cube
+        2. Grasp: bonus when gripper closes around cube
+        3. Lift: bonus when cube is lifted off ground while grasping
+        4. Place: cube approaching target (only when lifted)
+        5. Success: cube at target
     """
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
@@ -35,6 +36,8 @@ class PickCubeEnv(gym.Env):
         render_mode: str | None = None,
         max_episode_steps: int = 200,
         action_scale: float = 0.1,
+        # Reward config
+        reward_config: dict | None = None,
     ):
         super().__init__()
 
@@ -42,6 +45,21 @@ class PickCubeEnv(gym.Env):
         self.max_episode_steps = max_episode_steps
         self.action_scale = action_scale
         self._step_count = 0
+
+        # Reward configuration with defaults
+        reward_config = reward_config or {}
+        self.grasp_distance_threshold = reward_config.get("grasp_distance_threshold", 0.03)
+        self.gripper_closed_threshold = reward_config.get("gripper_closed_threshold", 0.3)
+        self.lift_height_threshold = reward_config.get("lift_height_threshold", 0.03)
+        self.success_threshold = reward_config.get("success_threshold", 0.03)
+
+        self.reach_weight = reward_config.get("reach_weight", 1.0)
+        self.grasp_bonus = reward_config.get("grasp_bonus", 1.0)
+        self.lift_bonus = reward_config.get("lift_bonus", 2.0)
+        self.lift_height_scale = reward_config.get("lift_height_scale", 10.0)
+        self.place_weight = reward_config.get("place_weight", 2.0)
+        self.success_bonus = reward_config.get("success_bonus", 10.0)
+        self.drop_penalty = reward_config.get("drop_penalty", 5.0)
 
         # Load model from SO-ARM100 directory where meshes are located
         scene_path = Path(__file__).parent.parent / "SO-ARM100/Simulation/SO101/pick_cube_scene.xml"
@@ -73,8 +91,8 @@ class PickCubeEnv(gym.Env):
             low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32
         )
 
-        # Target position (fixed for now, within arm's reach)
-        self.target_pos = np.array([0.40, 0.10, 0.015])
+        # Target position: inside bowl (bowl is at y=0.10, target z=0.04 above ground)
+        self.target_pos = np.array([0.40, 0.10, 0.04])
 
         # Renderer
         self._renderer = None
@@ -97,6 +115,24 @@ class PickCubeEnv(gym.Env):
             [joint_pos, joint_vel, gripper_pos, cube_pos, self.target_pos]
         ).astype(np.float32)
 
+    def _get_gripper_state(self) -> float:
+        """Get gripper joint position (lower = more closed)."""
+        gripper_joint_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_JOINT, "gripper"
+        )
+        gripper_qpos_addr = self.model.jnt_qposadr[gripper_joint_id]
+        return self.data.qpos[gripper_qpos_addr]
+
+    def _is_grasping(self, gripper_pos: np.ndarray, cube_pos: np.ndarray) -> bool:
+        """Check if gripper is grasping the cube."""
+        distance = np.linalg.norm(gripper_pos - cube_pos)
+        gripper_state = self._get_gripper_state()
+
+        is_close = distance < self.grasp_distance_threshold
+        is_closed = gripper_state < self.gripper_closed_threshold
+
+        return is_close and is_closed
+
     def _get_info(self) -> dict[str, Any]:
         """Get additional info."""
         gripper_pos = self.data.sensor("gripper_pos").data.copy()
@@ -104,13 +140,20 @@ class PickCubeEnv(gym.Env):
 
         gripper_to_cube = np.linalg.norm(gripper_pos - cube_pos)
         cube_to_target = np.linalg.norm(cube_pos - self.target_pos)
+        cube_z = cube_pos[2]
+
+        is_grasping = self._is_grasping(gripper_pos, cube_pos)
+        is_lifted = is_grasping and cube_z > self.lift_height_threshold
 
         return {
             "gripper_to_cube": gripper_to_cube,
             "cube_to_target": cube_to_target,
             "cube_pos": cube_pos.copy(),
             "gripper_pos": gripper_pos.copy(),
-            "is_success": cube_to_target < 0.03,
+            "gripper_state": self._get_gripper_state(),
+            "is_grasping": is_grasping,
+            "is_lifted": is_lifted,
+            "is_success": cube_to_target < self.success_threshold,
         }
 
     def reset(
@@ -127,11 +170,12 @@ class PickCubeEnv(gym.Env):
             cube_x = 0.40 + self.np_random.uniform(-0.03, 0.03)
             cube_y = -0.10 + self.np_random.uniform(-0.03, 0.03)
             # Set cube position (freejoint: 3 pos + 4 quat)
+            # Cube is 2cm (0.01 half-size), so z=0.01 puts it on ground
             cube_joint_id = mujoco.mj_name2id(
                 self.model, mujoco.mjtObj.mjOBJ_JOINT, "cube_joint"
             )
             cube_qpos_addr = self.model.jnt_qposadr[cube_joint_id]
-            self.data.qpos[cube_qpos_addr : cube_qpos_addr + 3] = [cube_x, cube_y, 0.015]
+            self.data.qpos[cube_qpos_addr : cube_qpos_addr + 3] = [cube_x, cube_y, 0.01]
             self.data.qpos[cube_qpos_addr + 3 : cube_qpos_addr + 7] = [1, 0, 0, 0]
 
         # Step once to update sensors
@@ -178,25 +222,47 @@ class PickCubeEnv(gym.Env):
         return obs, reward, terminated, truncated, info
 
     def _compute_reward(self, info: dict[str, Any]) -> float:
-        """Compute reward based on current state."""
+        """Compute staged reward based on current state.
+
+        Stages:
+        1. Reach: reward for gripper approaching cube
+        2. Grasp: bonus when gripper closes around cube
+        3. Lift: bonus when cube is lifted while grasping
+        4. Place: reward for moving lifted cube toward target
+        5. Success: large bonus when cube at target
+        """
         gripper_to_cube = info["gripper_to_cube"]
         cube_to_target = info["cube_to_target"]
         cube_z = info["cube_pos"][2]
+        is_grasping = info["is_grasping"]
+        is_lifted = info["is_lifted"]
 
-        # Reward components
-        # 1. Reaching: encourage gripper to approach cube
-        reach_reward = -gripper_to_cube
+        reward = 0.0
 
-        # 2. Placing: encourage cube to be at target (weighted higher)
-        place_reward = -2.0 * cube_to_target
+        # Stage 1: Reach - always encourage gripper to approach cube
+        reach_reward = -self.reach_weight * gripper_to_cube
+        reward += reach_reward
 
-        # 3. Success bonus
-        success_bonus = 10.0 if info["is_success"] else 0.0
+        # Stage 2: Grasp bonus - reward for closing gripper around cube
+        if is_grasping:
+            reward += self.grasp_bonus
 
-        # 4. Penalty if cube falls off table
-        drop_penalty = -5.0 if cube_z < 0.0 else 0.0
+        # Stage 3: Lift bonus - reward for lifting cube off ground
+        if is_lifted:
+            lift_reward = self.lift_bonus + cube_z * self.lift_height_scale
+            reward += lift_reward
 
-        reward = reach_reward + place_reward + success_bonus + drop_penalty
+            # Stage 4: Place - only encourage moving to target when lifted
+            place_reward = -self.place_weight * cube_to_target
+            reward += place_reward
+
+        # Stage 5: Success bonus
+        if info["is_success"]:
+            reward += self.success_bonus
+
+        # Penalty if cube falls off table
+        if cube_z < 0.0:
+            reward -= self.drop_penalty
 
         return reward
 
