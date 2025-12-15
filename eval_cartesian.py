@@ -15,9 +15,25 @@ def main():
     parser.add_argument("--model", type=str, required=True, help="Path to model .zip file")
     parser.add_argument("--normalize", type=str, default=None, help="Path to vec_normalize.pkl")
     parser.add_argument("--episodes", type=int, default=5)
-    parser.add_argument("--output", type=str, default="eval_cartesian.mp4")
+    parser.add_argument("--output", type=str, default=None,
+                        help="Output video path. Defaults to eval.mp4 in model's run directory")
     parser.add_argument("--fps", type=int, default=30)
     args = parser.parse_args()
+
+    # Determine output path - default to model's run directory
+    if args.output is None:
+        model_path = Path(args.model)
+        # Model is typically in checkpoints/ subdirectory, so go up to run dir
+        run_dir = model_path.parent.parent if model_path.parent.name == "checkpoints" else model_path.parent
+        # Extract step count from model filename for video name
+        step_str = ""
+        for part in model_path.stem.split("_"):
+            if part.isdigit():
+                step_str = f"_{part}"
+                break
+        output_path = run_dir / f"eval{step_str}.mp4"
+    else:
+        output_path = Path(args.output)
 
     # Create env
     env = LiftCubeCartesianEnv(render_mode="rgb_array", max_episode_steps=200)
@@ -33,14 +49,15 @@ def main():
     model = SAC.load(args.model)
     print(f"Loaded model from {args.model}")
 
-    frames = []
+    frames_closeup = []
+    frames_wide = []
+    frames_wide2 = []
     total_rewards = []
     successes = []
 
     for ep in range(args.episodes):
         obs = vec_env.reset()
         ep_reward = 0
-        ep_frames = []
 
         for step in range(200):
             action, _ = model.predict(obs, deterministic=True)
@@ -56,10 +73,16 @@ def main():
                       f"grasp={i.get('is_grasping', False)}, "
                       f"contacts=({i.get('has_gripper_contact', False)}, {i.get('has_jaw_contact', False)})")
 
-            # Render and collect frame
-            frame = env.render()
-            if frame is not None:
-                ep_frames.append(frame)
+            # Render all camera views
+            frame_closeup = env.render(camera="closeup")
+            frame_wide = env.render(camera="wide")
+            frame_wide2 = env.render(camera="wide2")
+            if frame_closeup is not None:
+                frames_closeup.append(frame_closeup)
+            if frame_wide is not None:
+                frames_wide.append(frame_wide)
+            if frame_wide2 is not None:
+                frames_wide2.append(frame_wide2)
 
             if done[0]:
                 break
@@ -74,12 +97,19 @@ def main():
               f"cube_z={final_info.get('cube_z', 0):.3f}, "
               f"gripper_to_cube={final_info.get('gripper_to_cube', 0):.3f}")
 
-        frames.extend(ep_frames)
-
-    # Save video
-    if frames:
-        imageio.mimsave(args.output, frames, fps=args.fps)
-        print(f"\nSaved video to {args.output}")
+    # Save all videos
+    if frames_closeup:
+        closeup_path = output_path.with_stem(output_path.stem + "_closeup")
+        imageio.mimsave(str(closeup_path), frames_closeup, fps=args.fps)
+        print(f"\nSaved closeup video to {closeup_path}")
+    if frames_wide:
+        wide_path = output_path.with_stem(output_path.stem + "_wide")
+        imageio.mimsave(str(wide_path), frames_wide, fps=args.fps)
+        print(f"Saved wide video to {wide_path}")
+    if frames_wide2:
+        wide2_path = output_path.with_stem(output_path.stem + "_wide2")
+        imageio.mimsave(str(wide2_path), frames_wide2, fps=args.fps)
+        print(f"Saved wide2 video to {wide2_path}")
 
     print(f"\nSummary:")
     print(f"  Mean reward: {np.mean(total_rewards):.2f} +/- {np.std(total_rewards):.2f}")

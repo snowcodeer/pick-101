@@ -1,5 +1,5 @@
-# Lift task - intermediate curriculum step
-# Simpler than pick-and-place: just lift cube above height threshold
+# Lift task with staged rewards (v3)
+# Uses continuous lift gradient: small reward without grasp, stronger with grasp
 experiment:
   name: "lift_cube"
   base_dir: "runs"
@@ -24,7 +24,7 @@ env:
   normalize_obs: true
   normalize_reward: true
   max_episode_steps: 200
-  action_scale: 0.1
+  action_scale: 0.02      # 2cm per step max (Cartesian)
   lift_height: 0.08       # 8cm above ground
   hold_steps: 10          # Must hold for 10 steps
   reward_type: "dense"    # Dense rewards for faster learning

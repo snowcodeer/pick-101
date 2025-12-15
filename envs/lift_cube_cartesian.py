@@ -298,11 +298,30 @@ class LiftCubeCartesianEnv(gym.Env):
 
             return reward
 
-    def render(self) -> np.ndarray | None:
+    def render(self, camera: str = "closeup") -> np.ndarray | None:
         if self.render_mode == "rgb_array":
             if self._renderer is None:
                 self._renderer = mujoco.Renderer(self.model, height=480, width=640)
-            self._renderer.update_scene(self.data)
+            cam = mujoco.MjvCamera()
+            if camera == "closeup":
+                # Side view close to cube
+                cam.lookat[:] = [0.40, -0.10, 0.03]
+                cam.distance = 0.35
+                cam.azimuth = 90
+                cam.elevation = -15
+            elif camera == "wide":
+                # Diagonal view of arm and cube
+                cam.lookat[:] = [0.25, -0.05, 0.05]
+                cam.distance = 0.8
+                cam.azimuth = 135
+                cam.elevation = -25
+            else:  # "wide2"
+                # Diagonal view from other side
+                cam.lookat[:] = [0.25, -0.05, 0.05]
+                cam.distance = 0.8
+                cam.azimuth = 45
+                cam.elevation = -25
+            self._renderer.update_scene(self.data, camera=cam)
             return self._renderer.render()
         return None
 
