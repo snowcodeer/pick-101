@@ -1,5 +1,4 @@
-# Lift task with staged rewards (v3)
-# Uses continuous lift gradient: small reward without grasp, stronger with grasp
+# Lift task configuration
 experiment:
   name: "lift_cube"
   base_dir: "runs"
@@ -28,6 +27,7 @@ env:
   lift_height: 0.08       # 8cm above ground
   hold_steps: 10          # Must hold for 10 steps
   reward_type: "dense"    # Dense rewards for faster learning
+  reward_version: "v7"    # v1, v7 - see envs/lift_cube.py for details
 
 eval:
   episodes: 10

@@ -32,6 +32,8 @@ def make_env(env_cfg: dict):
         lift_height=env_cfg.get("lift_height", 0.08),
         hold_steps=env_cfg.get("hold_steps", 10),
         reward_type=env_cfg.get("reward_type", "dense"),
+        reward_version=env_cfg.get("reward_version", "v7"),
+        curriculum_stage=env_cfg.get("curriculum_stage", 0),
     )
 
 

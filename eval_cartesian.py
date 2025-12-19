@@ -7,7 +7,7 @@ import numpy as np
 from stable_baselines3 import SAC
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
-from envs.lift_cube_cartesian import LiftCubeCartesianEnv
+from envs.lift_cube import LiftCubeCartesianEnv
 
 
 def main():
@@ -18,6 +18,8 @@ def main():
     parser.add_argument("--output", type=str, default=None,
                         help="Output video path. Defaults to eval.mp4 in model's run directory")
     parser.add_argument("--fps", type=int, default=30)
+    parser.add_argument("--curriculum-stage", type=int, default=0,
+                        help="Curriculum stage (0=normal, 1=grasped lifted, 2=grasped table, 3=near cube)")
     args = parser.parse_args()
 
     # Determine output path - default to model's run directory
@@ -36,7 +38,11 @@ def main():
         output_path = Path(args.output)
 
     # Create env
-    env = LiftCubeCartesianEnv(render_mode="rgb_array", max_episode_steps=200)
+    env = LiftCubeCartesianEnv(
+        render_mode="rgb_array",
+        max_episode_steps=200,
+        curriculum_stage=args.curriculum_stage,
+    )
     vec_env = DummyVecEnv([lambda: env])
 
     if args.normalize:

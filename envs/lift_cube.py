@@ -44,6 +44,7 @@ class LiftCubeCartesianEnv(gym.Env):
         hold_steps: int = 10,
         reward_type: str = "dense",
         reward_version: str = "v7",
+        curriculum_stage: int = 0,  # 0=normal, 1=cube in gripper lifted, 2=cube in gripper on table, 3=gripper near cube
     ):
         super().__init__()
 
@@ -54,8 +55,10 @@ class LiftCubeCartesianEnv(gym.Env):
         self.hold_steps = hold_steps
         self.reward_type = reward_type
         self.reward_version = reward_version
+        self.curriculum_stage = curriculum_stage
         self._step_count = 0
         self._hold_count = 0
+        self._was_grasping = False  # Track if we had grasp in previous step (for drop penalty)
 
         # Load model
         scene_path = Path(__file__).parent.parent / "SO-ARM100/Simulation/SO101/lift_cube_scene.xml"
@@ -205,16 +208,31 @@ class LiftCubeCartesianEnv(gym.Env):
 
         mujoco.mj_resetData(self.model, self.data)
 
-        # Randomize cube position
-        if self.np_random is not None:
-            cube_x = 0.40 + self.np_random.uniform(-0.03, 0.03)
-            cube_y = -0.10 + self.np_random.uniform(-0.03, 0.03)
-            cube_joint_id = mujoco.mj_name2id(
-                self.model, mujoco.mjtObj.mjOBJ_JOINT, "cube_joint"
-            )
-            cube_qpos_addr = self.model.jnt_qposadr[cube_joint_id]
-            self.data.qpos[cube_qpos_addr : cube_qpos_addr + 3] = [cube_x, cube_y, 0.01]
-            self.data.qpos[cube_qpos_addr + 3 : cube_qpos_addr + 7] = [1, 0, 0, 0]
+        # Get cube joint info
+        cube_joint_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_JOINT, "cube_joint"
+        )
+        cube_qpos_addr = self.model.jnt_qposadr[cube_joint_id]
+
+        if self.curriculum_stage == 0:
+            # Stage 0: Normal - cube on table, arm at home position
+            if self.np_random is not None:
+                cube_x = 0.40 + self.np_random.uniform(-0.03, 0.03)
+                cube_y = -0.10 + self.np_random.uniform(-0.03, 0.03)
+                self.data.qpos[cube_qpos_addr : cube_qpos_addr + 3] = [cube_x, cube_y, 0.01]
+                self.data.qpos[cube_qpos_addr + 3 : cube_qpos_addr + 7] = [1, 0, 0, 0]
+
+        elif self.curriculum_stage == 1:
+            # Stage 1: Cube in closed gripper at lift height (easiest - just hold)
+            self._reset_with_cube_in_gripper(cube_qpos_addr, lift_height=self.lift_height)
+
+        elif self.curriculum_stage == 2:
+            # Stage 2: Cube in closed gripper at table level (need to lift)
+            self._reset_with_cube_in_gripper(cube_qpos_addr, lift_height=0.03)
+
+        elif self.curriculum_stage == 3:
+            # Stage 3: Gripper near cube, open (need to close and lift)
+            self._reset_gripper_near_cube(cube_qpos_addr)
 
         mujoco.mj_forward(self.model, self.data)
 
@@ -223,8 +241,84 @@ class LiftCubeCartesianEnv(gym.Env):
 
         self._step_count = 0
         self._hold_count = 0
+        self._was_grasping = False
 
         return self._get_obs(), self._get_info()
+
+    def _reset_with_cube_in_gripper(self, cube_qpos_addr: int, lift_height: float):
+        """Reset with cube grasped in gripper at specified height.
+
+        Pre-rotates wrist_roll by 90 degrees so fingers are horizontal,
+        then uses IK to approach and grasp the cube from the side.
+        """
+        # Randomize cube position slightly
+        if self.np_random is not None:
+            cube_x = 0.40 + self.np_random.uniform(-0.02, 0.02)
+            cube_y = -0.10 + self.np_random.uniform(-0.02, 0.02)
+        else:
+            cube_x, cube_y = 0.40, -0.10
+
+        # Place cube on table
+        self.data.qpos[cube_qpos_addr : cube_qpos_addr + 3] = [cube_x, cube_y, 0.015]
+        self.data.qpos[cube_qpos_addr + 3 : cube_qpos_addr + 7] = [1, 0, 0, 0]
+
+        # Pre-rotate wrist_roll by 90 degrees so fingers are horizontal (Y-axis separation)
+        # This allows horizontal approach to achieve a proper grasp
+        self.data.qpos[4] = np.pi / 2  # wrist_roll = 90 degrees
+        self.data.ctrl[4] = np.pi / 2  # maintain wrist_roll position
+        mujoco.mj_forward(self.model, self.data)
+
+        # Step 1: Move gripper to cube height, offset in X
+        approach_pos = np.array([cube_x - 0.05, cube_y, 0.025])
+        for _ in range(100):
+            ctrl = self.ik.step_toward_target(approach_pos, gripper_action=1.0, gain=0.5)
+            ctrl[4] = np.pi / 2  # maintain wrist_roll
+            self.data.ctrl[:] = ctrl
+            mujoco.mj_step(self.model, self.data)
+
+        # Step 2: Move forward to grasp position
+        grasp_pos = np.array([cube_x, cube_y, 0.025])
+        for _ in range(100):
+            ctrl = self.ik.step_toward_target(grasp_pos, gripper_action=1.0, gain=0.5)
+            ctrl[4] = np.pi / 2  # maintain wrist_roll
+            self.data.ctrl[:] = ctrl
+            mujoco.mj_step(self.model, self.data)
+
+        # Step 3: Close gripper
+        for _ in range(100):
+            ctrl = self.ik.step_toward_target(grasp_pos, gripper_action=-1.0, gain=0.5)
+            ctrl[4] = np.pi / 2  # maintain wrist_roll
+            self.data.ctrl[:] = ctrl
+            mujoco.mj_step(self.model, self.data)
+
+        # Step 4: Lift to target height
+        lift_pos = np.array([cube_x, cube_y, lift_height])
+        for _ in range(100):
+            ctrl = self.ik.step_toward_target(lift_pos, gripper_action=-1.0, gain=0.5)
+            ctrl[4] = np.pi / 2  # maintain wrist_roll
+            self.data.ctrl[:] = ctrl
+            mujoco.mj_step(self.model, self.data)
+
+    def _reset_gripper_near_cube(self, cube_qpos_addr: int):
+        """Reset with gripper positioned near cube but open."""
+        # Randomize cube position
+        if self.np_random is not None:
+            cube_x = 0.40 + self.np_random.uniform(-0.02, 0.02)
+            cube_y = -0.10 + self.np_random.uniform(-0.02, 0.02)
+        else:
+            cube_x, cube_y = 0.40, -0.10
+
+        # Place cube on table
+        self.data.qpos[cube_qpos_addr : cube_qpos_addr + 3] = [cube_x, cube_y, 0.01]
+        self.data.qpos[cube_qpos_addr + 3 : cube_qpos_addr + 7] = [1, 0, 0, 0]
+
+        # Position gripper just above cube with gripper open
+        target_pos = np.array([cube_x, cube_y, 0.04])  # 3cm above cube
+
+        for _ in range(100):
+            ctrl = self.ik.step_toward_target(target_pos, gripper_action=1.0, gain=0.5)  # Open
+            self.data.ctrl[:] = ctrl
+            mujoco.mj_step(self.model, self.data)
 
     def step(
         self, action: np.ndarray
@@ -271,15 +365,18 @@ class LiftCubeCartesianEnv(gym.Env):
         is_success = self._hold_count >= self.hold_steps
         info["is_success"] = is_success
 
-        # Compute reward
-        reward = self._compute_reward(info)
+        # Compute reward (pass previous grasp state for drop penalty)
+        reward = self._compute_reward(info, was_grasping=self._was_grasping)
+
+        # Update previous grasp state for next step
+        self._was_grasping = info["is_grasping"]
 
         terminated = is_success
         truncated = self._step_count >= self.max_episode_steps
 
         return obs, reward, terminated, truncated, info
 
-    def _compute_reward(self, info: dict[str, Any]) -> float:
+    def _compute_reward(self, info: dict[str, Any], was_grasping: bool = False) -> float:
         if self.reward_type == "sparse":
             return 0.0 if info["is_success"] else -1.0
 
@@ -287,9 +384,9 @@ class LiftCubeCartesianEnv(gym.Env):
         reward_fn = getattr(self, f"_reward_{self.reward_version}", None)
         if reward_fn is None:
             raise ValueError(f"Unknown reward version: {self.reward_version}")
-        return reward_fn(info)
+        return reward_fn(info, was_grasping=was_grasping)
 
-    def _reward_v1(self, info: dict[str, Any]) -> float:
+    def _reward_v1(self, info: dict[str, Any], was_grasping: bool = False) -> float:
         """V1: Reach + grasp bonus + binary lift. Original reward that achieved grasping
         (via physics exploit with soft contacts)."""
         reward = 0.0
@@ -314,7 +411,7 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
-    def _reward_v2(self, info: dict[str, Any]) -> float:
+    def _reward_v2(self, info: dict[str, Any], was_grasping: bool = False) -> float:
         """V2: Reach + continuous lift (no grasp condition). Disrupted grasping entirely."""
         reward = 0.0
         cube_z = info["cube_z"]
@@ -341,7 +438,7 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
-    def _reward_v3(self, info: dict[str, Any]) -> float:
+    def _reward_v3(self, info: dict[str, Any], was_grasping: bool = False) -> float:
         """V3: V1 + continuous lift gradient. Destabilized training."""
         reward = 0.0
         cube_z = info["cube_z"]
@@ -371,7 +468,7 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
-    def _reward_v4(self, info: dict[str, Any]) -> float:
+    def _reward_v4(self, info: dict[str, Any], was_grasping: bool = False) -> float:
         """V4: V3 but grasp bonus only when elevated. Never closes gripper."""
         reward = 0.0
         cube_z = info["cube_z"]
@@ -400,7 +497,7 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
-    def _reward_v5(self, info: dict[str, Any]) -> float:
+    def _reward_v5(self, info: dict[str, Any], was_grasping: bool = False) -> float:
         """V5: V3 + push-down penalty. Nudge exploit - tilts cube."""
         reward = 0.0
         cube_z = info["cube_z"]
@@ -434,7 +531,7 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
-    def _reward_v6(self, info: dict[str, Any]) -> float:
+    def _reward_v6(self, info: dict[str, Any], was_grasping: bool = False) -> float:
         """V6: V5 without lift_baseline. Safe hover far away."""
         reward = 0.0
         cube_z = info["cube_z"]
@@ -464,7 +561,7 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
-    def _reward_v7(self, info: dict[str, Any]) -> float:
+    def _reward_v7(self, info: dict[str, Any], was_grasping: bool = False) -> float:
         """V7: V1 + push-down penalty. Prevents agent from pushing cube into table."""
         reward = 0.0
         cube_z = info["cube_z"]
@@ -493,12 +590,61 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
-    def render(self) -> np.ndarray | None:
+    def _reward_v8(self, info: dict[str, Any], was_grasping: bool = False) -> float:
+        """V8: V7 + drop penalty. Penalizes losing grasp after having it.
+
+        For curriculum learning where agent starts with cube grasped,
+        this prevents the agent from learning to drop the cube.
+        """
+        reward = 0.0
+        cube_z = info["cube_z"]
+        gripper_to_cube = info["gripper_to_cube"]
+        is_grasping = info["is_grasping"]
+
+        # Reach reward
+        reach_reward = 1.0 - np.tanh(10.0 * gripper_to_cube)
+        reward += reach_reward
+
+        # Push-down penalty
+        if cube_z < 0.01:
+            push_penalty = (0.01 - cube_z) * 50.0
+            reward -= push_penalty
+
+        # Drop penalty: penalize losing grasp after having it
+        if was_grasping and not is_grasping:
+            reward -= 2.0  # Significant penalty for dropping
+
+        # Grasp bonus (always)
+        if is_grasping:
+            reward += 0.25
+
+        # Binary lift bonus
+        if cube_z > 0.02:
+            reward += 1.0
+
+        # Success bonus
+        if info["is_success"]:
+            reward += 10.0
+
+        return reward
+
+    def render(self, camera: str = "sideview") -> np.ndarray | None:
         if self.render_mode == "rgb_array":
             if self._renderer is None:
                 self._renderer = mujoco.Renderer(self.model, height=480, width=640)
-            # Use sideview camera for close-up of gripper-cube interaction
-            camera_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, "sideview")
+            # Map camera names (closeup/wide/wide2 -> sideview/frontview/topview)
+            camera_map = {
+                "closeup": "sideview",
+                "wide": "frontview",
+                "wide2": "topview",
+                "sideview": "sideview",
+                "frontview": "frontview",
+                "topview": "topview",
+            }
+            cam_name = camera_map.get(camera, "sideview")
+            camera_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, cam_name)
+            if camera_id == -1:
+                camera_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, "sideview")
             self._renderer.update_scene(self.data, camera=camera_id)
             return self._renderer.render()
         return None

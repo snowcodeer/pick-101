@@ -1,0 +1,38 @@
+# Lift task - Curriculum Stage 1: Cube already grasped at lift height
+# Agent learns to HOLD the cube (easiest stage)
+# Uses V8 reward with drop penalty to prevent agent from learning to drop
+experiment:
+  name: "lift_curriculum_s1_v7"
+  base_dir: "runs"
+
+training:
+  timesteps: 500000
+  eval_freq: 10000
+  save_freq: 50000
+  seed: 42
+
+sac:
+  learning_rate: 3.0e-4
+  buffer_size: 100000
+  learning_starts: 1000
+  batch_size: 256
+  tau: 0.005
+  gamma: 0.99
+  train_freq: 1
+  gradient_steps: 1
+
+env:
+  normalize_obs: true
+  normalize_reward: true
+  max_episode_steps: 100  # Shorter episodes for holding task
+  action_scale: 0.02
+  lift_height: 0.08
+  hold_steps: 10
+  reward_type: "dense"
+  reward_version: "v7"
+  curriculum_stage: 1  # Start with cube grasped at lift height
+
+eval:
+  episodes: 10
+  video_width: 640
+  video_height: 480
