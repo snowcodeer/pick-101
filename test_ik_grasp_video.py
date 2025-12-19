@@ -123,20 +123,31 @@ print(f"Finger mid: {finger_mid}")
 print(f"Cube: {cube_pos}")
 print(f"Finger mid Z vs Cube Z: {finger_mid[2]:.4f} vs {cube_pos[2]:.4f}")
 
-# Step 3: Close
+# Step 3: Close until grasp achieved
 print("\n--- Step 3: Close ---")
 gripper_joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "gripper")
 gripper_qpos_addr = model.jnt_qposadr[gripper_joint_id]
 
+grasp_gripper_action = 1.0  # Will be locked once grasp achieved
 for step in range(800):
-    t = min(step / 600, 1.0)  # Slower gripper close
-    gripper_action = 1.0 - 2.0 * t
+    contacts = get_contacts()
+    has_27_28 = 27 in contacts or 28 in contacts
+    has_29_30 = 29 in contacts or 30 in contacts
+
+    if has_27_28 and has_29_30:
+        # Both fingers contacting - lock gripper and start lifting
+        print(f"  step {step}: GRASP ACHIEVED, starting lift")
+        break
+
+    # Keep closing
+    t = min(step / 600, 1.0)
+    grasp_gripper_action = 1.0 - 2.0 * t
 
     offset = get_tcp_to_finger_offset()
     finger_target = np.array([cube_x, cube_y, cube_z])
     tcp_target = finger_target + offset
 
-    ctrl = ik.step_toward_target(tcp_target, gripper_action=gripper_action, gain=0.5, locked_joints=[3, 4])
+    ctrl = ik.step_toward_target(tcp_target, gripper_action=grasp_gripper_action, gain=0.5, locked_joints=[3, 4])
     ctrl[3] = 1.65
     ctrl[4] = np.pi / 2
     data.ctrl[:] = ctrl
@@ -147,16 +158,24 @@ for step in range(800):
 
     if step % 100 == 0:
         gripper_pos = data.qpos[gripper_qpos_addr]
-        print(f"  step {step}: gripper={gripper_pos:.3f}, contacts={get_contacts()}")
+        print(f"  step {step}: gripper={gripper_pos:.3f}, contacts={contacts}")
 
-# Step 4: Lift
+# Step 4: Lift - maintain grasp force, gradually increase target height
 print("\n--- Step 4: Lift ---")
-for step in range(150):
+lift_start_z = cube_z
+lift_target_z = 0.10
+
+for step in range(300):
+    # Gradual lift
+    t = min(step / 200, 1.0)
+    current_z = lift_start_z + (lift_target_z - lift_start_z) * t
+
     offset = get_tcp_to_finger_offset()
-    finger_target = np.array([cube_x, cube_y, 0.10])
+    finger_target = np.array([cube_x, cube_y, current_z])
     tcp_target = finger_target + offset
 
-    ctrl = ik.step_toward_target(tcp_target, gripper_action=-1.0, gain=0.5, locked_joints=[3, 4])
+    # Maintain gripper at grasp position (slightly tighter to hold)
+    ctrl = ik.step_toward_target(tcp_target, gripper_action=grasp_gripper_action - 0.2, gain=0.5, locked_joints=[3, 4])
     ctrl[3] = 1.65
     ctrl[4] = np.pi / 2
     data.ctrl[:] = ctrl
@@ -164,6 +183,11 @@ for step in range(150):
 
     if step % 5 == 0:
         frames.append(capture_frame())
+
+    if step % 50 == 0:
+        contacts = get_contacts()
+        cube_z_now = data.qpos[cube_qpos_addr + 2]
+        print(f"  step {step}: target_z={current_z:.3f}, cube_z={cube_z_now:.3f}, contacts={contacts}")
 
 contacts = get_contacts()
 cube_z_final = data.qpos[cube_qpos_addr+2]
