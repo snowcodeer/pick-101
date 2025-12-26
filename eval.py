@@ -11,7 +11,7 @@ import yaml
 from stable_baselines3 import SAC
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
-from envs.pick_cube import PickCubeEnv
+from src.envs.pick_cube import PickCubeEnv
 
 
 def main():

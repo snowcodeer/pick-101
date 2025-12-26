@@ -10,7 +10,7 @@ from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
-from envs.pick_cube import PickCubeEnv
+from src.envs.pick_cube import PickCubeEnv
 
 
 def load_config(config_path: str) -> dict:

@@ -11,7 +11,7 @@ import mujoco
 import numpy as np
 from gymnasium import spaces
 
-from controllers.ik_controller import IKController
+from src.controllers.ik_controller import IKController
 
 
 class LiftCubeCartesianEnv(gym.Env):

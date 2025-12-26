@@ -6,7 +6,7 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
-from controllers.ik_controller import IKController
+from src.controllers.ik_controller import IKController
 
 
 def test_random_targets():

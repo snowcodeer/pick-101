@@ -15,8 +15,8 @@ from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
-from callbacks.plot_callback import PlotLearningCurveCallback
-from envs.lift_cube import LiftCubeCartesianEnv
+from src.callbacks.plot_callback import PlotLearningCurveCallback
+from src.envs.lift_cube import LiftCubeCartesianEnv
 
 
 def load_config(config_path: str) -> dict:

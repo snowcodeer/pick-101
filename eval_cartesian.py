@@ -7,7 +7,7 @@ import numpy as np
 from stable_baselines3 import SAC
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
-from envs.lift_cube import LiftCubeCartesianEnv
+from src.envs.lift_cube import LiftCubeCartesianEnv
 
 
 def main():
