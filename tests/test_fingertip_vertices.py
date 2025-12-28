@@ -55,7 +55,7 @@ def add_marker_sphere(scn, pos, rgba, size=0.005):
 
 
 def main():
-    scene_path = Path("SO-ARM100/Simulation/SO101/lift_cube_scene.xml")
+    scene_path = Path("models/so101/lift_cube.xml")
     model = mujoco.MjModel.from_xml_path(str(scene_path))
     data = mujoco.MjData(model)
 
@@ -212,7 +212,7 @@ def find_closest_opposing_vertices(model, data, static_gid, moving_gid):
 if __name__ == "__main__":
     import sys
     if "--no-viewer" in sys.argv:
-        scene_path = Path("SO-ARM100/Simulation/SO101/lift_cube_scene.xml")
+        scene_path = Path("models/so101/lift_cube.xml")
         model = mujoco.MjModel.from_xml_path(str(scene_path))
         data = mujoco.MjData(model)
 

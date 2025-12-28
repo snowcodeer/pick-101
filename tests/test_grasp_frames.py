@@ -4,7 +4,7 @@ import numpy as np
 import imageio
 from pathlib import Path
 
-scene_path = Path("SO-ARM100/Simulation/SO101/lift_cube_scene.xml")
+scene_path = Path("models/so101/lift_cube.xml")
 model = mujoco.MjModel.from_xml_path(str(scene_path))
 data = mujoco.MjData(model)
 

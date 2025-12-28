@@ -11,7 +11,7 @@ from src.controllers.ik_controller import IKController
 
 def test_random_targets():
     """Move end-effector to random targets in workspace."""
-    scene_path = Path(__file__).parent / "SO-ARM100/Simulation/SO101/lift_cube_scene.xml"
+    scene_path = Path(__file__).parent / "models/so101/lift_cube.xml"
     model = mujoco.MjModel.from_xml_path(str(scene_path))
     data = mujoco.MjData(model)
 
@@ -73,7 +73,7 @@ def test_random_targets():
 
 def test_cube_approach():
     """Test approaching and grasping the cube."""
-    scene_path = Path(__file__).parent / "SO-ARM100/Simulation/SO101/lift_cube_scene.xml"
+    scene_path = Path(__file__).parent / "models/so101/lift_cube.xml"
     model = mujoco.MjModel.from_xml_path(str(scene_path))
     data = mujoco.MjData(model)
 

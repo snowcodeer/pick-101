@@ -5,7 +5,7 @@ import imageio
 from pathlib import Path
 from src.controllers.ik_controller import IKController
 
-scene_path = Path("SO-ARM100/Simulation/SO101/lift_cube_scene_ik_grasp.xml")
+scene_path = Path("models/so101/lift_cube_ik_grasp.xml")
 model = mujoco.MjModel.from_xml_path(str(scene_path))
 data = mujoco.MjData(model)
 
