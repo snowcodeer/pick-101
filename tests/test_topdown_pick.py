@@ -216,7 +216,7 @@ def pick_up_block(cube_pos, viewer=None):
         t = min(step / 200, 1.0)
         target = grasp_target + (lift_pos - grasp_target) * t
 
-        ctrl = ik.step_toward_target(target, gripper_action=grasp_action, gain=0.5, locked_joints=locked_joints)
+        ctrl = ik.step_toward_target(target, gripper_action=grasp_action, gain=0.3, locked_joints=locked_joints)
         data.ctrl[:] = ctrl
         mujoco.mj_step(model, data)
 
@@ -234,7 +234,7 @@ def pick_up_block(cube_pos, viewer=None):
     # Hold at lift position
     print(f"\n5. Holding...")
     for step in range(200):
-        ctrl = ik.step_toward_target(lift_pos, gripper_action=grasp_action, gain=0.5, locked_joints=locked_joints)
+        ctrl = ik.step_toward_target(lift_pos, gripper_action=grasp_action, gain=0.3, locked_joints=locked_joints)
         data.ctrl[:] = ctrl
         mujoco.mj_step(model, data)
 
