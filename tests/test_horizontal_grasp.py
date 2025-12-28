@@ -196,10 +196,19 @@ def run_horizontal_grasp(cube_height=0.06, viewer=None):
     print("\nClosing gripper...")
     grasp_action = 1.0  # Start open
     contact_step = None
-    tighten_amount = 0.1  # Close a bit more after contact
+    contact_action = None
+    tighten_amount = 0.28  # Close more after contact (wood friction needs tighter grip)
     for step in range(500):
-        t = min(step / 350, 1.0)
-        gripper_action = 1.0 - 2.0 * t
+        # Close gradually until contact
+        if contact_step is None:
+            t = min(step / 350, 1.0)
+            gripper_action = 1.0 - 2.0 * t
+        else:
+            # After contact, close slowly to target
+            steps_since_contact = step - contact_step
+            t_slow = min(steps_since_contact / 100, 1.0)  # Slow tightening over 100 steps
+            target_action = max(contact_action - tighten_amount, -1.0)
+            gripper_action = contact_action + (target_action - contact_action) * t_slow
 
         # Keep targeting finger_mid to cube as we close
         graspframe_pos = ik.get_ee_position()
@@ -216,24 +225,24 @@ def run_horizontal_grasp(cube_height=0.06, viewer=None):
         if step % 100 == 0:
             print(f"  step {step}: gripper_action={gripper_action:.2f}, qpos={gripper_qpos:.3f}, grasping={is_grasping()}")
 
-        # Detect initial contact, then tighten a bit more before stopping
+        # Detect initial contact
         if is_grasping() and contact_step is None:
             contact_step = step
             contact_action = gripper_action
             print(f"  Contact at step {step}, gripper_action={gripper_action:.2f}")
 
+        # Check if we've finished tightening
         if contact_step is not None:
-            # Continue closing until we've tightened by tighten_amount or hit limit
-            target_action = max(contact_action - tighten_amount, -1.0)  # Clamp to actuator limit
-            if gripper_action <= target_action:
+            target_action = max(contact_action - tighten_amount, -1.0)
+            if gripper_action <= target_action + 0.01:  # Small tolerance
                 grasp_action = gripper_action
                 print(f"  Tightened to grasp_action={grasp_action:.2f} (contact was {contact_action:.2f})")
                 break
     else:
         # Loop completed without reaching target - use current gripper state
         if contact_step is not None:
-            grasp_action = -1.0  # Max closed
-            print(f"  Loop ended, using max grip grasp_action={grasp_action:.2f}")
+            grasp_action = gripper_action
+            print(f"  Loop ended, grasp_action={grasp_action:.2f}")
 
     # Step 3: Lift (target finger_mid upward)
     # Allow wrist to flex during lift to maintain grasp
