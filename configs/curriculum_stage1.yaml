@@ -28,7 +28,7 @@ env:
   lift_height: 0.08         # 8cm above ground
   hold_steps: 10            # Must hold for 10 steps
   reward_type: "dense"
-  reward_version: "v7"
+  reward_version: "v10"  # stronger lift gradient (5.0x) for curriculum learning
   curriculum_stage: 1       # Start with cube in gripper at lift height
   lock_wrist: true          # Lock wrist for stable holding
 

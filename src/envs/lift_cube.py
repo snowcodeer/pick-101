@@ -751,12 +751,12 @@ class LiftCubeCartesianEnv(gym.Env):
         return reward
 
     def _reward_v10(self, info: dict[str, Any], was_grasping: bool = False) -> float:
-        """V10: Lift-focused reward for curriculum learning.
+        """V10: v9 + target height bonus.
 
         Changes from v9:
         - No reach reward when grasping (redundant, dominates signal)
         - Stronger lift gradient (5.0 instead of 2.0)
-        - Makes lifting the dominant reward signal when holding cube
+        - +1.0 bonus when reaching target height (z >= 0.08)
         """
         reward = 0.0
         cube_z = info["cube_z"]
@@ -779,6 +779,10 @@ class LiftCubeCartesianEnv(gym.Env):
             # Lift is the main reward when grasping
             lift_progress = max(0, cube_z - 0.015) / (self.lift_height - 0.015)
             reward += lift_progress * 5.0  # Up to +5.0 at target height
+
+            # Target height bonus (tight band around target)
+            if abs(cube_z - self.lift_height) < 0.005:
+                reward += 1.0
 
         else:
             # Only use reach reward when not grasping (need to recover)

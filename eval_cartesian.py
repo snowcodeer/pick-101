@@ -76,14 +76,13 @@ def main():
             obs, reward, done, info = vec_env.step(action)
             ep_reward += reward[0]
 
-            # Log gripper/contact info periodically
-            if step % 50 == 0:
-                i = info[0]
-                print(f"  step={step}: gripper={i.get('gripper_state', 0):.3f}, "
-                      f"dist={i.get('gripper_to_cube', 0):.3f}, "
-                      f"cube_z={i.get('cube_z', 0):.3f}, "
-                      f"grasp={i.get('is_grasping', False)}, "
-                      f"contacts=({i.get('has_gripper_contact', False)}, {i.get('has_jaw_contact', False)})")
+            # Log every step with z height, action, and reward
+            i = info[0]
+            act = action[0]  # Get raw action
+            print(f"  step={step:3d}: z={i.get('cube_z', 0):.4f}, "
+                  f"r={reward[0]:+.3f}, "
+                  f"act=[{act[0]:+.2f},{act[1]:+.2f},{act[2]:+.2f},{act[3]:+.2f}], "
+                  f"grasp={i.get('is_grasping', False)}")
 
             # Render all camera views
             frame_closeup = env.render(camera="closeup")
