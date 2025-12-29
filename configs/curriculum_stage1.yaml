@@ -5,7 +5,7 @@ experiment:
   base_dir: "runs"
 
 training:
-  timesteps: 200000
+  timesteps: 500000
   eval_freq: 10000
   save_freq: 50000
   seed: 42
@@ -23,12 +23,12 @@ sac:
 env:
   normalize_obs: true
   normalize_reward: true
-  max_episode_steps: 100    # Shorter episodes for holding task
+  max_episode_steps: 300    # Enough time to lift + hold 3 seconds
   action_scale: 0.02        # 2cm per step max (Cartesian)
   lift_height: 0.08         # 8cm above ground
-  hold_steps: 10            # Must hold for 10 steps
+  hold_steps: 150           # Must hold for 150 steps (~3 seconds at 50Hz)
   reward_type: "dense"
-  reward_version: "v10"  # stronger lift gradient (5.0x) for curriculum learning
+  reward_version: "v11"  # v10 + action rate penalty + target bonus z>0.08
   curriculum_stage: 1       # Start with cube in gripper at lift height
   lock_wrist: true          # Lock wrist for stable holding
 

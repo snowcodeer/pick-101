@@ -62,6 +62,7 @@ class LiftCubeCartesianEnv(gym.Env):
         self._hold_count = 0
         self._was_grasping = False  # Track if we had grasp in previous step (for drop penalty)
         self._reset_gripper_action = None  # Gripper action used at reset (for curriculum)
+        self._prev_action = np.zeros(4)  # Track previous action for smoothness penalty
 
         # Load model
         scene_path = Path(__file__).parent.parent.parent / "models/so101/lift_cube.xml"
@@ -241,6 +242,7 @@ class LiftCubeCartesianEnv(gym.Env):
         self._step_count = 0
         self._hold_count = 0
         self._was_grasping = False
+        self._prev_action = np.zeros(4)
 
         return self._get_obs(), self._get_info()
 
@@ -445,17 +447,18 @@ class LiftCubeCartesianEnv(gym.Env):
         info["is_success"] = is_success
 
         # Compute reward (pass previous grasp state for drop penalty)
-        reward = self._compute_reward(info, was_grasping=self._was_grasping)
+        reward = self._compute_reward(info, was_grasping=self._was_grasping, action=action)
 
-        # Update previous grasp state for next step
+        # Update previous grasp state and action for next step
         self._was_grasping = info["is_grasping"]
+        self._prev_action = action.copy()
 
         terminated = is_success
         truncated = self._step_count >= self.max_episode_steps
 
         return obs, reward, terminated, truncated, info
 
-    def _compute_reward(self, info: dict[str, Any], was_grasping: bool = False) -> float:
+    def _compute_reward(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
         if self.reward_type == "sparse":
             return 0.0 if info["is_success"] else -1.0
 
@@ -463,9 +466,9 @@ class LiftCubeCartesianEnv(gym.Env):
         reward_fn = getattr(self, f"_reward_{self.reward_version}", None)
         if reward_fn is None:
             raise ValueError(f"Unknown reward version: {self.reward_version}")
-        return reward_fn(info, was_grasping=was_grasping)
+        return reward_fn(info, was_grasping=was_grasping, action=action)
 
-    def _reward_v1(self, info: dict[str, Any], was_grasping: bool = False) -> float:
+    def _reward_v1(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
         """V1: Reach + grasp bonus + binary lift. Original reward that achieved grasping
         (via physics exploit with soft contacts)."""
         reward = 0.0
@@ -490,7 +493,7 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
-    def _reward_v2(self, info: dict[str, Any], was_grasping: bool = False) -> float:
+    def _reward_v2(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
         """V2: Reach + continuous lift (no grasp condition). Disrupted grasping entirely."""
         reward = 0.0
         cube_z = info["cube_z"]
@@ -517,7 +520,7 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
-    def _reward_v3(self, info: dict[str, Any], was_grasping: bool = False) -> float:
+    def _reward_v3(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
         """V3: V1 + continuous lift gradient. Destabilized training."""
         reward = 0.0
         cube_z = info["cube_z"]
@@ -547,7 +550,7 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
-    def _reward_v4(self, info: dict[str, Any], was_grasping: bool = False) -> float:
+    def _reward_v4(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
         """V4: V3 but grasp bonus only when elevated. Never closes gripper."""
         reward = 0.0
         cube_z = info["cube_z"]
@@ -576,7 +579,7 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
-    def _reward_v5(self, info: dict[str, Any], was_grasping: bool = False) -> float:
+    def _reward_v5(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
         """V5: V3 + push-down penalty. Nudge exploit - tilts cube."""
         reward = 0.0
         cube_z = info["cube_z"]
@@ -610,7 +613,7 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
-    def _reward_v6(self, info: dict[str, Any], was_grasping: bool = False) -> float:
+    def _reward_v6(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
         """V6: V5 without lift_baseline. Safe hover far away."""
         reward = 0.0
         cube_z = info["cube_z"]
@@ -640,7 +643,7 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
-    def _reward_v7(self, info: dict[str, Any], was_grasping: bool = False) -> float:
+    def _reward_v7(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
         """V7: V1 + push-down penalty. Prevents agent from pushing cube into table."""
         reward = 0.0
         cube_z = info["cube_z"]
@@ -669,7 +672,7 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
-    def _reward_v8(self, info: dict[str, Any], was_grasping: bool = False) -> float:
+    def _reward_v8(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
         """V8: V7 + drop penalty. Penalizes losing grasp after having it.
 
         For curriculum learning where agent starts with cube grasped,
@@ -707,7 +710,7 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
-    def _reward_v9(self, info: dict[str, Any], was_grasping: bool = False) -> float:
+    def _reward_v9(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
         """V9: V8 + continuous lift gradient. For curriculum learning.
 
         Adds smooth reward for lifting higher while grasping, instead of
@@ -750,18 +753,19 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
-    def _reward_v10(self, info: dict[str, Any], was_grasping: bool = False) -> float:
+    def _reward_v10(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
         """V10: v9 + target height bonus.
 
-        Changes from v9:
-        - No reach reward when grasping (redundant, dominates signal)
-        - Stronger lift gradient (5.0 instead of 2.0)
-        - +1.0 bonus when reaching target height (z >= 0.08)
+        Only change from v9: +1.0 bonus when z is within 5mm of target.
         """
         reward = 0.0
         cube_z = info["cube_z"]
         gripper_to_cube = info["gripper_to_cube"]
         is_grasping = info["is_grasping"]
+
+        # Reach reward
+        reach_reward = 1.0 - np.tanh(10.0 * gripper_to_cube)
+        reward += reach_reward
 
         # Push-down penalty
         if cube_z < 0.01:
@@ -770,24 +774,74 @@ class LiftCubeCartesianEnv(gym.Env):
 
         # Drop penalty
         if was_grasping and not is_grasping:
-            reward -= 5.0  # Stronger penalty for dropping
+            reward -= 2.0
 
+        # Grasp bonus
         if is_grasping:
-            # Small grasp maintenance bonus
-            reward += 0.1
+            reward += 0.25
 
-            # Lift is the main reward when grasping
+            # Continuous lift reward when grasping
             lift_progress = max(0, cube_z - 0.015) / (self.lift_height - 0.015)
-            reward += lift_progress * 5.0  # Up to +5.0 at target height
+            reward += lift_progress * 2.0
 
-            # Target height bonus (tight band around target)
-            if abs(cube_z - self.lift_height) < 0.005:
-                reward += 1.0
+        # Binary lift bonus
+        if cube_z > 0.02:
+            reward += 1.0
 
-        else:
-            # Only use reach reward when not grasping (need to recover)
-            reach_reward = 1.0 - np.tanh(10.0 * gripper_to_cube)
-            reward += reach_reward
+        # Target height bonus (the only addition from v9)
+        if abs(cube_z - self.lift_height) < 0.005:
+            reward += 1.0
+
+        # Success bonus
+        if info["is_success"]:
+            reward += 10.0
+
+        return reward
+
+    def _reward_v11(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
+        """V11: v10 + action rate penalty for smooth control.
+
+        Penalizes rapid action changes to reduce twitching/oscillation.
+        """
+        reward = 0.0
+        cube_z = info["cube_z"]
+        gripper_to_cube = info["gripper_to_cube"]
+        is_grasping = info["is_grasping"]
+
+        # Reach reward
+        reach_reward = 1.0 - np.tanh(10.0 * gripper_to_cube)
+        reward += reach_reward
+
+        # Push-down penalty
+        if cube_z < 0.01:
+            push_penalty = (0.01 - cube_z) * 50.0
+            reward -= push_penalty
+
+        # Drop penalty
+        if was_grasping and not is_grasping:
+            reward -= 2.0
+
+        # Grasp bonus
+        if is_grasping:
+            reward += 0.25
+
+            # Continuous lift reward when grasping
+            lift_progress = max(0, cube_z - 0.015) / (self.lift_height - 0.015)
+            reward += lift_progress * 2.0
+
+        # Binary lift bonus
+        if cube_z > 0.02:
+            reward += 1.0
+
+        # Target height bonus (aligned with success: z > lift_height)
+        if cube_z > self.lift_height:
+            reward += 1.0
+
+        # Action rate penalty for smoothness (only when lifted, to not hinder lifting)
+        if action is not None and cube_z > 0.06:
+            action_delta = action - self._prev_action
+            action_penalty = 0.01 * np.sum(action_delta**2)
+            reward -= action_penalty
 
         # Success bonus
         if info["is_success"]:
