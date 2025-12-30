@@ -11,6 +11,8 @@
         <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0" />
         <rgba haze="0.15 0.25 0.35 1" />
         <global azimuth="90" elevation="-20" />
+        <!-- znear=0.005 very small to avoid clipping through finger meshes -->
+        <map znear="0.005" />
     </visual>
 
     <asset>
