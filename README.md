@@ -69,6 +69,49 @@ PYTHONPATH=. uv run python tests/test_topdown_pick.py
 PYTHONPATH=. uv run python tests/test_topdown_pick.py --viewer
 ```
 
+## Training Pick-and-Lift Agent
+
+Train an RL agent (SAC) to grasp a cube and lift it to a target height:
+
+```bash
+# Train for 1M steps (~4 hours on RTX 4090)
+PYTHONPATH=. uv run python train_lift.py --config configs/curriculum_stage3.yaml
+```
+
+The agent learns to:
+1. Approach the cube from above
+2. Close gripper to grasp
+3. Lift to 8cm height
+4. Hold for 3 seconds
+
+Training outputs are saved to `runs/lift_curriculum_s3/<timestamp>/`:
+- `checkpoints/` - Model checkpoints every 100k steps
+- `vec_normalize.pkl` - Observation normalization stats
+- `tensorboard/` - Training logs
+
+### Evaluation
+
+Evaluate a trained model and generate videos:
+
+```bash
+PYTHONPATH=. uv run python eval_cartesian.py \
+  --run runs/lift_curriculum_s3/<timestamp> \
+  --checkpoint 1000000
+```
+
+This runs 10 deterministic episodes and saves videos to the run directory.
+
+### Resume Training
+
+To continue training from a checkpoint:
+
+```bash
+PYTHONPATH=. uv run python train_lift.py \
+  --config configs/curriculum_stage3.yaml \
+  --resume runs/lift_curriculum_s3/<timestamp> \
+  --timesteps 500000  # Additional steps
+```
+
 ## Robot Model Variants
 
 | Model | Features | Use Case |
