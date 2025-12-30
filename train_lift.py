@@ -82,21 +82,20 @@ def main():
             f.write(f"Timestamp: {timestamp}\n")
 
     # Determine if we need to load VecNormalize from a previous run
+    # Note: For --resume, we load the VecNormalize stats (same task, same distribution)
+    # For --pretrained, we DON'T load stats - the new curriculum stage likely has
+    # different observation distributions, so we start fresh normalization
     pretrained = args.pretrained or train_cfg.get("pretrained")
     vec_normalize_path = None
     if args.resume:
         vec_normalize_path = resume_dir / "vec_normalize.pkl"
-    elif pretrained:
-        # For pretrained, find vec_normalize.pkl in the run directory
-        # pretrained path is like: runs/.../checkpoints/model.zip
-        pretrained_path = Path(pretrained)
-        pretrained_run_dir = pretrained_path.parent.parent
-        vec_normalize_path = pretrained_run_dir / "vec_normalize.pkl"
+    # Note: pretrained does NOT load VecNormalize - different curriculum stages
+    # have different observation distributions
 
     # Create environments
     env = DummyVecEnv([lambda: make_env(env_cfg)])
 
-    # Load normalization stats if available
+    # Load normalization stats only for resume (same task)
     if vec_normalize_path and vec_normalize_path.exists():
         env = VecNormalize.load(vec_normalize_path, env)
         env.training = True  # Continue updating stats during training
@@ -104,11 +103,14 @@ def main():
     elif vec_normalize_path:
         raise ValueError(f"vec_normalize.pkl not found: {vec_normalize_path}")
     else:
+        # Fresh normalization for new training or pretrained (curriculum transfer)
         env = VecNormalize(
             env,
             norm_obs=env_cfg["normalize_obs"],
             norm_reward=env_cfg["normalize_reward"],
         )
+        if pretrained:
+            print("Using fresh VecNormalize for curriculum transfer (not loading old stats)")
 
     eval_env = DummyVecEnv([lambda: make_env(env_cfg)])
     if vec_normalize_path and vec_normalize_path.exists():
