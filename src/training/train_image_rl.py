@@ -1,4 +1,9 @@
-"""Train image-based RL agent for SO-101 lift task using RoboBase."""
+"""Train image-based RL agent for SO-101 lift task using RoboBase.
+
+Resume training:
+    MUJOCO_GL=egl uv run python src/training/train_image_rl.py \
+        resume_from=runs/image_rl/20231231_120000/snapshots/latest_snapshot.pt
+"""
 
 # Use spawn for multiprocessing (required for EGL/GPU rendering on AMD)
 import multiprocessing
@@ -11,8 +16,11 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+# Patch logger BEFORE importing robobase.workspace
+from src.training.sb3_style_logger import patch_robobase_logger
+patch_robobase_logger()
+
 import hydra
-from hydra.core.global_hydra import GlobalHydra
 from omegaconf import DictConfig, OmegaConf
 
 from robobase.workspace import Workspace
@@ -34,6 +42,17 @@ def main(cfg: DictConfig):
     """Train image-based RL agent."""
     # Create workspace with SO-101 factory
     workspace = Workspace(cfg, env_factory=SO101Factory())
+
+    # Check for resume
+    resume_from = cfg.get("resume_from", None)
+    if resume_from:
+        snapshot_path = Path(resume_from)
+        if snapshot_path.exists():
+            print(f"Resuming from snapshot: {snapshot_path}")
+            workspace.load_snapshot(snapshot_path)
+        else:
+            raise FileNotFoundError(f"Snapshot not found: {snapshot_path}")
+
     workspace.train()
 
 
