@@ -1,0 +1,146 @@
+"""SO-101 environment factory for RoboBase."""
+
+from typing import Any
+
+import gymnasium as gym
+import mujoco
+import numpy as np
+from gymnasium.wrappers import TimeLimit
+from omegaconf import DictConfig
+
+from robobase.envs.env import EnvFactory
+from robobase.envs.wrappers import (
+    ActionSequence,
+    AppendDemoInfo,
+    ConcatDim,
+    FrameStack,
+    OnehotTime,
+    RescaleFromTanh,
+)
+
+from src.envs.lift_cube import LiftCubeCartesianEnv
+
+
+class WristCameraWrapper(gym.ObservationWrapper):
+    """Adds wrist camera image to observation dict for RoboBase."""
+
+    def __init__(
+        self,
+        env: gym.Env,
+        image_size: tuple[int, int] = (84, 84),
+        camera: str = "wrist_cam",
+    ):
+        super().__init__(env)
+        self.image_size = image_size
+        self.camera = camera
+
+        # Setup MuJoCo renderer
+        self._renderer = mujoco.Renderer(
+            self.unwrapped.model,
+            height=image_size[0],
+            width=image_size[1],
+        )
+
+        # Get base observation space from wrapped env
+        base_obs_space = env.observation_space
+        if isinstance(base_obs_space, gym.spaces.Dict):
+            base_shape = base_obs_space["low_dim_state"].shape
+        else:
+            base_shape = base_obs_space.shape
+
+        # Create dict observation space with image and low-dim state
+        # RoboBase expects (C, H, W) format, not (V, C, H, W)
+        self.observation_space = gym.spaces.Dict(
+            {
+                "rgb": gym.spaces.Box(
+                    low=0,
+                    high=255,
+                    shape=(3, image_size[0], image_size[1]),  # (C, H, W)
+                    dtype=np.uint8,
+                ),
+                "low_dim_state": gym.spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=base_shape,
+                    dtype=np.float32,
+                ),
+            }
+        )
+
+    def observation(self, obs: np.ndarray) -> dict[str, np.ndarray]:
+        """Convert state observation to dict with image and state."""
+        # Render from wrist camera
+        self._renderer.update_scene(self.unwrapped.data, camera=self.camera)
+        img = self._renderer.render()
+
+        # Convert to channels-first (HWC -> CHW)
+        img = np.transpose(img, (2, 0, 1))  # (C, H, W)
+
+        return {
+            "rgb": img,
+            "low_dim_state": obs.astype(np.float32),
+        }
+
+    def close(self):
+        if hasattr(self, "_renderer"):
+            self._renderer.close()
+        super().close()
+
+
+class SO101Factory(EnvFactory):
+    """Factory for SO-101 lift cube environment."""
+
+    def _wrap_env(self, env: gym.Env, cfg: DictConfig) -> gym.Env:
+        """Apply standard RoboBase wrappers."""
+        # Rescale actions from [-1, 1] tanh output
+        env = RescaleFromTanh(env)
+
+        # Add one-hot time encoding if requested
+        if cfg.use_onehot_time_and_no_bootstrap:
+            env = OnehotTime(env, cfg.env.episode_length)
+
+        # Add wrist camera if pixel mode
+        if cfg.pixels:
+            env = WristCameraWrapper(
+                env,
+                image_size=(cfg.env.image_size, cfg.env.image_size),
+                camera="wrist_cam",
+            )
+
+        # Concatenate low-dim state along dim 1 (time axis after frame stack)
+        env = ConcatDim(env, 1, 0, "low_dim_state")
+
+        # Time limit
+        env = TimeLimit(env, cfg.env.episode_length)
+
+        # Action sequence (required by RoboBase for action chunking)
+        env = ActionSequence(env, cfg.action_sequence)
+
+        # Frame stacking
+        env = FrameStack(env, cfg.frame_stack)
+
+        # Demo info for demo-driven RL
+        env = AppendDemoInfo(env)
+
+        return env
+
+    def _make_base_env(self, cfg: DictConfig) -> gym.Env:
+        """Create base SO-101 environment."""
+        return LiftCubeCartesianEnv(
+            render_mode="rgb_array" if cfg.pixels else None,
+            max_episode_steps=cfg.env.episode_length,
+            curriculum_stage=cfg.env.get("curriculum_stage", 3),
+            reward_version=cfg.env.get("reward_version", "v11"),
+            lock_wrist=cfg.env.get("lock_wrist", False),
+        )
+
+    def make_train_env(self, cfg: DictConfig) -> gym.vector.VectorEnv:
+        """Create vectorized training environments."""
+        return gym.vector.AsyncVectorEnv(
+            [lambda: self._wrap_env(self._make_base_env(cfg), cfg) for _ in range(cfg.num_train_envs)],
+            context="spawn",
+        )
+
+    def make_eval_env(self, cfg: DictConfig) -> gym.Env:
+        """Create single evaluation environment."""
+        return self._wrap_env(self._make_base_env(cfg), cfg)
