@@ -9,7 +9,7 @@ env:
   episode_length: 200
   image_size: 84
   curriculum_stage: 3  # 0=normal, 1=lifted, 2=table grasp, 3=near cube, 4=far
-  reward_version: v11
+  reward_version: v13
   lock_wrist: false
   stddev_schedule: "linear(1.0,0.1,500000)"
 
@@ -20,7 +20,7 @@ num_train_envs: 8
 batch_size: 256
 
 # Training settings
-num_train_frames: 1000000
+num_train_frames: 2000000
 eval_every_steps: 10000
 num_eval_episodes: 10
 replay_size_before_train: 2000

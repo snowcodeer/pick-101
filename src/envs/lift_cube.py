@@ -1080,6 +1080,57 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
+    def _reward_v13(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
+        """V13: v11 with binary lift bonus gated on is_grasping.
+
+        Fixes exploit where agent tilts cube to get lift bonus without proper grasp.
+        """
+        reward = 0.0
+        cube_z = info["cube_z"]
+        gripper_to_cube = info["gripper_to_cube"]
+        is_grasping = info["is_grasping"]
+
+        # Reach reward
+        reach_reward = 1.0 - np.tanh(10.0 * gripper_to_cube)
+        reward += reach_reward
+
+        # Push-down penalty
+        if cube_z < 0.01:
+            push_penalty = (0.01 - cube_z) * 50.0
+            reward -= push_penalty
+
+        # Drop penalty
+        if was_grasping and not is_grasping:
+            reward -= 2.0
+
+        # Grasp bonus
+        if is_grasping:
+            reward += 0.25
+
+            # Continuous lift reward when grasping
+            lift_progress = max(0, cube_z - 0.015) / (self.lift_height - 0.015)
+            reward += lift_progress * 2.0
+
+            # Binary lift bonus (NOW GATED on is_grasping)
+            if cube_z > 0.02:
+                reward += 1.0
+
+        # Target height bonus (aligned with success: z > lift_height)
+        if cube_z > self.lift_height:
+            reward += 1.0
+
+        # Action rate penalty for smoothness (only when lifted, to not hinder lifting)
+        if action is not None and cube_z > 0.06:
+            action_delta = action - self._prev_action
+            action_penalty = 0.01 * np.sum(action_delta**2)
+            reward -= action_penalty
+
+        # Success bonus
+        if info["is_success"]:
+            reward += 10.0
+
+        return reward
+
     def render(self, camera: str = "closeup") -> np.ndarray | None:
         if self.render_mode == "rgb_array":
             if self._renderer is None:
