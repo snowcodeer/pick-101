@@ -27,8 +27,85 @@ from robobase.replay_buffer.prioritized_replay_buffer import PrioritizedReplayBu
 from robobase.replay_buffer.replay_buffer import ReplayBuffer
 from robobase.replay_buffer.uniform_replay_buffer import UniformReplayBuffer
 from robobase.video import VideoRecorder
+import mujoco
 
 from src.training.config_loader import instantiate
+
+
+class MultiCameraVideoRecorder:
+    """Video recorder that captures wrist_cam | closeup | wide views side-by-side."""
+
+    def __init__(self, save_dir: Path, render_size: int = 256, fps: int = 20):
+        self.save_dir = save_dir
+        if save_dir is not None:
+            self.save_dir.mkdir(exist_ok=True)
+        self.render_size = render_size
+        self.fps = fps
+        self.frames = []
+        self._renderer = None
+        self._model = None
+
+    def init(self, env, enabled: bool = True):
+        self.frames = []
+        self.enabled = self.save_dir is not None and enabled
+        if self.enabled:
+            base_env = env.unwrapped
+            self._model = base_env.model
+            self._renderer = mujoco.Renderer(
+                self._model, height=self.render_size, width=self.render_size
+            )
+        self.record(env)
+
+    def _render_view(self, data, camera_config) -> np.ndarray:
+        """Render a single view from camera config."""
+        if isinstance(camera_config, str):
+            self._renderer.update_scene(data, camera=camera_config)
+        else:
+            lookat, dist, azim, elev = camera_config
+            cam = mujoco.MjvCamera()
+            cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+            cam.lookat[:] = lookat
+            cam.distance = dist
+            cam.azimuth = azim
+            cam.elevation = elev
+            self._renderer.update_scene(data, camera=cam)
+        return self._renderer.render().copy()
+
+    def record(self, env):
+        if not self.enabled:
+            return
+
+        base_env = env.unwrapped
+        data = base_env.data
+
+        # 3 views: wrist_cam | closeup | wide
+        views = []
+
+        # 1. Wrist cam (what agent sees)
+        views.append(self._render_view(data, "wrist_cam"))
+
+        # 2. Closeup (zoomed on gripper/cube area)
+        closeup_config = ([0.35, 0.0, 0.08], 0.25, 135, -25)
+        views.append(self._render_view(data, closeup_config))
+
+        # 3. Wide (full scene)
+        wide_config = ([0.30, 0.0, 0.1], 0.9, 135, -30)
+        views.append(self._render_view(data, wide_config))
+
+        # Combine horizontally
+        combined = np.concatenate(views, axis=1)
+        self.frames.append(combined)
+
+    def save(self, file_name: str):
+        if self.enabled and len(self.frames) > 0:
+            import imageio
+            path = self.save_dir / file_name
+            imageio.mimsave(str(path), np.array(self.frames), fps=self.fps)
+
+        # Cleanup renderer
+        if self._renderer is not None:
+            self._renderer.close()
+            self._renderer = None
 
 torch.backends.cudnn.benchmark = True
 
@@ -195,8 +272,8 @@ class SO101Workspace:
                 worker_init_fn=_worker_init_fn,
             )
 
-        # Video recorder
-        self.eval_video_recorder = VideoRecorder(
+        # Video recorder (multi-camera: wrist_cam | closeup | wide)
+        self.eval_video_recorder = MultiCameraVideoRecorder(
             (self.work_dir / "eval_videos") if self.cfg.log_eval_video else None
         )
 
