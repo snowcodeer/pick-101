@@ -550,19 +550,28 @@ class SO101Workspace:
 
         self.agent.reset(self.main_loop_iterations, agents_reset)
 
-    def _eval(self, eval_record_all_episode: bool = False) -> dict[str, Any]:
+    def _eval(self, eval_record_all_episode: bool = False, save_video_and_log: bool = False) -> dict[str, Any]:
         self.agent.set_eval_env_running(True)
         step, episode, total_reward, successes = 0, 0, 0, 0
         eval_until_episode = utils.Until(self.cfg.num_eval_episodes)
         first_rollout = []
         metrics = {}
 
+        # Debug data collection for logging (when saving video)
+        all_episode_data = []
+
         while eval_until_episode(episode):
             observation, info = self.eval_env.reset()
             self.agent.reset(self.main_loop_iterations, [self.train_envs.num_envs])
-            enabled = eval_record_all_episode or episode == 0
+            enabled = save_video_and_log and (eval_record_all_episode or episode == 0)
             self.eval_video_recorder.init(self.eval_env, enabled=enabled)
             termination, truncation = False, False
+
+            # Per-episode debug data
+            episode_data = {
+                "cube_z": [], "step_reward": [], "is_grasping": [],
+                "gripper_pos": [], "gripper_state": [],
+            }
 
             while not (termination or truncation):
                 (
@@ -580,15 +589,32 @@ class SO101Workspace:
                 total_reward += reward
                 step += 1
 
+                # Collect debug data if saving
+                if save_video_and_log:
+                    base_env = self.eval_env.unwrapped
+                    episode_data["cube_z"].append(info.get("cube_z", 0))
+                    episode_data["step_reward"].append(reward)
+                    episode_data["is_grasping"].append(info.get("is_grasping", False))
+                    episode_data["gripper_pos"].append(info.get("gripper_pos", [0, 0, 0]))
+                    if hasattr(base_env, "_get_gripper_state"):
+                        episode_data["gripper_state"].append(base_env._get_gripper_state())
+
             if episode == 0:
                 first_rollout = np.array(self.eval_video_recorder.frames)
-            self.eval_video_recorder.save(f"{self.global_env_steps}.mp4")
+            if save_video_and_log:
+                self.eval_video_recorder.save(f"{self.global_env_steps}.mp4")
+                all_episode_data.append(episode_data)
+
             success = info.get("task_success")
             if success is not None:
                 successes += np.array(success).astype(int).item()
             else:
                 successes = None
             episode += 1
+
+        # Save debug log alongside video
+        if save_video_and_log and all_episode_data:
+            self._save_eval_debug_log(all_episode_data)
 
         metrics.update(
             {
@@ -603,12 +629,47 @@ class SO101Workspace:
         self.agent.set_eval_env_running(False)
         return metrics
 
+    def _save_eval_debug_log(self, all_episode_data: list[dict]):
+        """Save debug log text file alongside eval video."""
+        log_path = self.work_dir / "eval_videos" / f"{self.global_env_steps}_debug.txt"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(log_path, "w") as f:
+            f.write(f"Eval Debug Log @ step {self.global_env_steps}\n")
+            f.write("=" * 60 + "\n\n")
+
+            for ep_idx, ep_data in enumerate(all_episode_data):
+                cube_z = np.array(ep_data["cube_z"])
+                rewards = np.array(ep_data["step_reward"])
+                grasping = np.array(ep_data["is_grasping"])
+                gripper_state = np.array(ep_data["gripper_state"]) if ep_data["gripper_state"] else None
+
+                f.write(f"Episode {ep_idx}:\n")
+                f.write(f"  Steps: {len(cube_z)}\n")
+                f.write(f"  Total reward: {rewards.sum():.3f}\n")
+                f.write(f"  Cube Z: min={cube_z.min():.4f}, max={cube_z.max():.4f}, final={cube_z[-1]:.4f}\n")
+                f.write(f"  Grasping: {grasping.sum()} steps ({100*grasping.mean():.1f}%)\n")
+                if gripper_state is not None and len(gripper_state) > 0:
+                    f.write(f"  Gripper: min={gripper_state.min():.3f}, max={gripper_state.max():.3f}, mean={gripper_state.mean():.3f} (closed<0.25)\n")
+                f.write("\n")
+
+                # CSV-style per-step data
+                f.write("  step,cube_z,reward,is_grasping,gripper_state\n")
+                for i in range(len(cube_z)):
+                    gs = gripper_state[i] if gripper_state is not None and i < len(gripper_state) else 0
+                    f.write(f"  {i},{cube_z[i]:.4f},{rewards[i]:.4f},{int(grasping[i])},{gs:.4f}\n")
+                f.write("\n")
+
+        print(f"Saved eval debug log to {log_path}")
+
     def _online_rl(self):
         train_until_frame = utils.Until(self.cfg.num_train_frames)
         seed_until_size = utils.Until(self.cfg.replay_size_before_train)
         should_log = utils.Every(self.cfg.log_every)
         eval_every_n = self.cfg.eval_every_steps if self.eval_env is not None else 0
         should_eval = utils.Every(eval_every_n)
+        video_every_n = getattr(self.cfg, "log_eval_video_every", 100000)
+        should_save_video = utils.Every(video_every_n)
         snapshot_every_n = self.cfg.snapshot_every_n if self.cfg.save_snapshot else 0
         should_save_snapshot = utils.Every(snapshot_every_n)
 
@@ -667,7 +728,8 @@ class SO101Workspace:
                 self.logger.log_metrics(metrics, self.global_env_steps, prefix="train")
 
             if should_eval(self.main_loop_iterations):
-                eval_metrics = self._eval()
+                save_video = should_save_video(self.main_loop_iterations) and self.cfg.log_eval_video
+                eval_metrics = self._eval(save_video_and_log=save_video)
                 eval_metrics.update(self._get_common_metrics())
                 self.logger.log_metrics(
                     eval_metrics, self.global_env_steps, prefix="eval"
@@ -725,6 +787,7 @@ class SO101Workspace:
         ]
         payload = {k: self.__dict__[k] for k in keys_to_save}
         payload["agent"] = self.agent.state_dict()
+        payload["cfg"] = self.cfg
         torch.save(payload, snapshot)
 
         # Also save as latest
@@ -744,6 +807,7 @@ class SO101Workspace:
             ]
             payload = {k: self.__dict__[k] for k in keys_to_save}
             payload["agent"] = self.agent.state_dict()
+            payload["cfg"] = self.cfg
             payload["best_eval_reward"] = eval_reward
             torch.save(payload, best_path)
             print(f"New best eval reward: {eval_reward:.2f}, saved to {best_path}")

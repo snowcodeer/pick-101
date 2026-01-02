@@ -66,6 +66,7 @@ class LiftCubeCartesianEnv(gym.Env):
         self._reset_gripper_action = None  # Gripper action used at reset (for curriculum)
         self._prev_action = np.zeros(4)  # Track previous action for smoothness penalty
         self._place_target_pos = None  # Full 3D target position (set at reset)
+        self._open_gripper_count = 0  # Track consecutive steps with open gripper (for v15)
 
         # Load model
         scene_path = Path(__file__).parent.parent.parent / "models/so101/lift_cube.xml"
@@ -285,6 +286,7 @@ class LiftCubeCartesianEnv(gym.Env):
         self._hold_count = 0
         self._was_grasping = False
         self._prev_action = np.zeros(4)
+        self._open_gripper_count = 0
 
         return self._get_obs(), self._get_info()
 
@@ -1179,6 +1181,75 @@ class LiftCubeCartesianEnv(gym.Env):
             action_delta = action - self._prev_action
             action_penalty = 0.02 * np.sum(action_delta**2)
             reward -= action_penalty
+
+        # Success bonus
+        if info["is_success"]:
+            reward += 10.0
+
+        return reward
+
+    def _reward_v15(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
+        """V15: v14 + penalty for keeping gripper open too long.
+
+        Addresses the local optimum where agent maximizes reach reward without ever
+        closing the gripper. After a grace period, applies increasing penalty for
+        keeping gripper open (state > 0.3, more open than initial).
+        """
+        reward = 0.0
+        cube_z = info["cube_z"]
+        gripper_to_cube = info["gripper_to_cube"]
+        is_grasping = info["is_grasping"]
+        hold_count = info["hold_count"]
+        gripper_state = info["gripper_state"]
+
+        # Track consecutive steps with gripper open (more than initial 0.3)
+        if gripper_state > 0.3:
+            self._open_gripper_count += 1
+        else:
+            self._open_gripper_count = 0
+
+        # Reach reward
+        reach_reward = 1.0 - np.tanh(10.0 * gripper_to_cube)
+        reward += reach_reward
+
+        # Push-down penalty
+        if cube_z < 0.01:
+            push_penalty = (0.01 - cube_z) * 50.0
+            reward -= push_penalty
+
+        # Drop penalty
+        if was_grasping and not is_grasping:
+            reward -= 2.0
+
+        # Grasp bonus
+        if is_grasping:
+            reward += 0.25
+
+            # Continuous lift reward when grasping
+            lift_progress = max(0, cube_z - 0.015) / (self.lift_height - 0.015)
+            reward += lift_progress * 2.0
+
+            # Binary lift bonus (gated on is_grasping)
+            if cube_z > 0.02:
+                reward += 1.0
+
+        # Target height bonus (aligned with success: z > lift_height)
+        if cube_z > self.lift_height:
+            reward += 1.0
+
+        # Action rate penalty ONLY during hold phase at target height
+        if action is not None and cube_z > self.lift_height and hold_count > 0:
+            action_delta = action - self._prev_action
+            action_penalty = 0.02 * np.sum(action_delta**2)
+            reward -= action_penalty
+
+        # Gripper-open penalty: after 40 steps grace period, penalize keeping gripper open
+        # Penalty grows gradually: 0.05 per step after grace period, capped at 0.3
+        grace_period = 40
+        if self._open_gripper_count > grace_period:
+            excess_steps = self._open_gripper_count - grace_period
+            open_penalty = min(0.05 * excess_steps / 50, 0.3)  # Grows over 50 steps, caps at 0.3
+            reward -= open_penalty
 
         # Success bonus
         if info["is_success"]:

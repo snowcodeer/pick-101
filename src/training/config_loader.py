@@ -74,6 +74,7 @@ ROBOBASE_DEFAULTS = {
     "log_every": 1000,
     "log_train_video": False,
     "log_eval_video": True,
+    "log_eval_video_every": 100000,  # Save eval video + debug log every N steps
     "log_pretrain_every": 100,
     "save_csv": False,
 }
