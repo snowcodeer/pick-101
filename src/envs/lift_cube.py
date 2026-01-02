@@ -1257,6 +1257,68 @@ class LiftCubeCartesianEnv(gym.Env):
 
         return reward
 
+    def _reward_v16(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
+        """V16: v14 with increased grasp bonus (1.5 instead of 0.25).
+
+        Addresses the local optimum where agent hovers near cube with open gripper.
+        The weak +0.25 grasp bonus wasn't worth the exploration cost of learning to close.
+        With +1.5, grasping gives ~2.4 reward vs ~0.9 for hovering - a clear incentive.
+
+        Reward breakdown when grasping at target height:
+        - Reach: ~0.9
+        - Grasp: +1.5
+        - Lift progress: +2.0
+        - Binary lift: +1.0
+        - Target height: +1.0
+        - Total: ~6.4
+        """
+        reward = 0.0
+        cube_z = info["cube_z"]
+        gripper_to_cube = info["gripper_to_cube"]
+        is_grasping = info["is_grasping"]
+        hold_count = info["hold_count"]
+
+        # Reach reward
+        reach_reward = 1.0 - np.tanh(10.0 * gripper_to_cube)
+        reward += reach_reward
+
+        # Push-down penalty
+        if cube_z < 0.01:
+            push_penalty = (0.01 - cube_z) * 50.0
+            reward -= push_penalty
+
+        # Drop penalty
+        if was_grasping and not is_grasping:
+            reward -= 2.0
+
+        # Grasp bonus (increased from 0.25 to 1.5)
+        if is_grasping:
+            reward += 1.5
+
+            # Continuous lift reward when grasping
+            lift_progress = max(0, cube_z - 0.015) / (self.lift_height - 0.015)
+            reward += lift_progress * 2.0
+
+            # Binary lift bonus (gated on is_grasping)
+            if cube_z > 0.02:
+                reward += 1.0
+
+        # Target height bonus (aligned with success: z > lift_height)
+        if cube_z > self.lift_height:
+            reward += 1.0
+
+        # Action rate penalty ONLY during hold phase at target height
+        if action is not None and cube_z > self.lift_height and hold_count > 0:
+            action_delta = action - self._prev_action
+            action_penalty = 0.02 * np.sum(action_delta**2)
+            reward -= action_penalty
+
+        # Success bonus
+        if info["is_success"]:
+            reward += 10.0
+
+        return reward
+
     def render(self, camera: str = "closeup") -> np.ndarray | None:
         if self.render_mode == "rgb_array":
             if self._renderer is None:
