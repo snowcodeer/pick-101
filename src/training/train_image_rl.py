@@ -59,12 +59,11 @@ def main():
     # Copy config to output directory
     shutil.copy(args.config, work_dir / "config.yaml")
 
-    # Import RoboBase workspace after patching hydra
-    from robobase.workspace import Workspace
+    # Import custom workspace with MultiCameraVideoRecorder (wrist_cam | closeup | wide)
+    from src.training.workspace import SO101Workspace
 
     # Create workspace with SO-101 factory
-    # Pass work_dir explicitly to avoid HydraConfig dependency
-    workspace = Workspace(
+    workspace = SO101Workspace(
         cfg=cfg,
         env_factory=SO101Factory(),
         work_dir=str(work_dir),

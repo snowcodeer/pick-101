@@ -81,15 +81,17 @@ class MultiCameraVideoRecorder:
         # 3 views: wrist_cam | closeup | wide
         views = []
 
-        # 1. Wrist cam (what agent sees)
+        # 1. Wrist cam (what agent sees - uses wrist_cam from model XML)
         views.append(self._render_view(data, "wrist_cam"))
 
-        # 2. Closeup (zoomed on gripper/cube area)
-        closeup_config = ([0.35, 0.0, 0.08], 0.25, 135, -25)
+        # 2. Closeup (same as env.render() default - side view close to cube)
+        # Original: lookat=[0.40, -0.10, 0.03], distance=0.35, azimuth=90, elevation=-15
+        closeup_config = ([0.40, -0.10, 0.03], 0.35, 90, -15)
         views.append(self._render_view(data, closeup_config))
 
-        # 3. Wide (full scene)
-        wide_config = ([0.30, 0.0, 0.1], 0.9, 135, -30)
+        # 3. Wide (diagonal view of arm and cube)
+        # Original: lookat=[0.25, -0.05, 0.05], distance=0.8, azimuth=135, elevation=-25
+        wide_config = ([0.25, -0.05, 0.05], 0.8, 135, -25)
         views.append(self._render_view(data, wide_config))
 
         # Combine horizontally
