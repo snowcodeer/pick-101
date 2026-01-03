@@ -125,14 +125,14 @@ def apply_calibrated_camera(model):
 
     cam_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "wrist_cam")
 
-    # Final calibrated settings:
-    # Position: [0.02, -0.08, -0.06] (x, y, z in gripper local frame)
-    # Euler: [-40, 0, 180] (pitch, yaw, roll in degrees XYZ convention)
-    # FOV: 103 degrees
-    model.cam_pos[cam_id] = [0.02, -0.08, -0.06]
-    model.cam_fovy[cam_id] = 103.0
+    # Final calibrated settings (v4):
+    # Position: [0.02, -0.08, -0.02] (x, y, z in gripper local frame)
+    # Euler: [-25, 0, 180] (pitch, yaw, roll in degrees XYZ convention)
+    # FOV: 86 degrees vertical (real camera 4:3 has 103° H, 86° V)
+    model.cam_pos[cam_id] = [0.02, -0.08, -0.02]
+    model.cam_fovy[cam_id] = 86.0
 
-    rot = R.from_euler("xyz", [-40, 0, 180], degrees=True)
+    rot = R.from_euler("xyz", [-25, 0, 180], degrees=True)
     q = rot.as_quat()  # x,y,z,w
     model.cam_quat[cam_id] = [q[3], q[0], q[1], q[2]]  # w,x,y,z
 
