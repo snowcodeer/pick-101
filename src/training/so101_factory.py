@@ -33,7 +33,13 @@ class SuccessInfoWrapper(gym.Wrapper):
 
 
 class WristCameraWrapper(gym.ObservationWrapper):
-    """Adds wrist camera image to observation dict for RoboBase."""
+    """Adds wrist camera image to observation dict for RoboBase.
+
+    Matches real camera preprocessing:
+    1. Render at 640x480 (4:3 aspect ratio like real innoMaker camera)
+    2. Center crop to 480x480 (1:1 square)
+    3. Resize to target image_size (default 84x84)
+    """
 
     def __init__(
         self,
@@ -45,11 +51,16 @@ class WristCameraWrapper(gym.ObservationWrapper):
         self.image_size = image_size
         self.camera = camera
 
-        # Setup MuJoCo renderer
+        # Render at 640x480 to match real camera aspect ratio (4:3)
+        self._render_width = 640
+        self._render_height = 480
+        self._crop_size = 480  # Center crop to square
+
+        # Setup MuJoCo renderer at real camera resolution
         self._renderer = mujoco.Renderer(
             self.unwrapped.model,
-            height=image_size[0],
-            width=image_size[1],
+            height=self._render_height,
+            width=self._render_width,
         )
 
         # Get base observation space from wrapped env
@@ -79,10 +90,25 @@ class WristCameraWrapper(gym.ObservationWrapper):
         )
 
     def observation(self, obs: np.ndarray) -> dict[str, np.ndarray]:
-        """Convert state observation to dict with image and state."""
-        # Render from wrist camera
+        """Convert state observation to dict with image and state.
+
+        Preprocessing matches real camera:
+        1. Render at 640x480 (4:3)
+        2. Center crop to 480x480 (1:1)
+        3. Resize to target size (84x84)
+        """
+        import cv2
+
+        # Render from wrist camera at 640x480
         self._renderer.update_scene(self.unwrapped.data, camera=self.camera)
-        img = self._renderer.render()
+        img = self._renderer.render()  # (480, 640, 3)
+
+        # Center crop to 480x480 (crop 80px from each side)
+        crop_x = (self._render_width - self._crop_size) // 2  # 80
+        img = img[:, crop_x:crop_x + self._crop_size, :]  # (480, 480, 3)
+
+        # Resize to target size
+        img = cv2.resize(img, self.image_size, interpolation=cv2.INTER_AREA)
 
         # Convert to channels-first (HWC -> CHW)
         img = np.transpose(img, (2, 0, 1))  # (C, H, W)

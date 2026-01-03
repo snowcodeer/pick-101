@@ -37,9 +37,14 @@ def render_multi_camera(env: LiftCubeCartesianEnv, cameras: list[str], size: int
     - 'side': Side view
     - 'front': Front view
     - 'iso': Isometric view
+
+    Note: wrist_cam uses real camera preprocessing (640x480 -> 480x480 center crop -> size)
     """
+    import cv2
+
     frames = {}
     renderer = mujoco.Renderer(env.model, height=size, width=size)
+    wrist_renderer = None  # Lazy init for wrist cam
 
     # Virtual camera configurations: (lookat, distance, azimuth, elevation)
     virtual_cameras = {
@@ -60,6 +65,19 @@ def render_multi_camera(env: LiftCubeCartesianEnv, cameras: list[str], size: int
             cam_obj.azimuth = azim
             cam_obj.elevation = elev
             renderer.update_scene(env.data, camera=cam_obj)
+            frames[cam] = renderer.render().copy()
+        elif cam == "wrist_cam":
+            # Wrist cam with real camera preprocessing (640x480 -> 480x480 center crop)
+            if wrist_renderer is None:
+                wrist_renderer = mujoco.Renderer(env.model, height=480, width=640)
+            wrist_renderer.update_scene(env.data, camera="wrist_cam")
+            img = wrist_renderer.render()  # (480, 640, 3)
+            # Center crop to 480x480
+            crop_x = (640 - 480) // 2  # 80
+            img = img[:, crop_x:crop_x + 480, :]  # (480, 480, 3)
+            # Resize to target size
+            img = cv2.resize(img, (size, size), interpolation=cv2.INTER_AREA)
+            frames[cam] = img
         else:
             # Named camera from model
             try:
@@ -67,10 +85,11 @@ def render_multi_camera(env: LiftCubeCartesianEnv, cameras: list[str], size: int
             except Exception as e:
                 print(f"Warning: Camera '{cam}' not found, using default view")
                 renderer.update_scene(env.data)
-
-        frames[cam] = renderer.render().copy()
+            frames[cam] = renderer.render().copy()
 
     renderer.close()
+    if wrist_renderer is not None:
+        wrist_renderer.close()
     return frames
 
 

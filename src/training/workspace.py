@@ -43,6 +43,7 @@ class MultiCameraVideoRecorder:
         self.fps = fps
         self.frames = []
         self._renderer = None
+        self._wrist_renderer = None  # Separate renderer for wrist cam (640x480)
         self._model = None
 
     def init(self, env, enabled: bool = True):
@@ -54,7 +55,26 @@ class MultiCameraVideoRecorder:
             self._renderer = mujoco.Renderer(
                 self._model, height=self.render_size, width=self.render_size
             )
+            # Wrist cam renderer at real camera resolution (640x480)
+            self._wrist_renderer = mujoco.Renderer(
+                self._model, height=480, width=640
+            )
         self.record(env)
+
+    def _render_wrist_cam(self, data) -> np.ndarray:
+        """Render wrist cam with real camera preprocessing (640x480 -> 480x480 center crop)."""
+        import cv2
+
+        self._wrist_renderer.update_scene(data, camera="wrist_cam")
+        img = self._wrist_renderer.render()  # (480, 640, 3)
+
+        # Center crop to 480x480 (crop 80px from each side)
+        crop_x = (640 - 480) // 2  # 80
+        img = img[:, crop_x:crop_x + 480, :]  # (480, 480, 3)
+
+        # Resize to render_size for video
+        img = cv2.resize(img, (self.render_size, self.render_size), interpolation=cv2.INTER_AREA)
+        return img
 
     def _render_view(self, data, camera_config) -> np.ndarray:
         """Render a single view from camera config."""
@@ -81,8 +101,8 @@ class MultiCameraVideoRecorder:
         # 3 views: wrist_cam | closeup | wide
         views = []
 
-        # 1. Wrist cam (what agent sees - uses wrist_cam from model XML)
-        views.append(self._render_view(data, "wrist_cam"))
+        # 1. Wrist cam (what agent sees - with real camera preprocessing)
+        views.append(self._render_wrist_cam(data))
 
         # 2. Closeup (same as env.render() default - side view close to cube)
         # Original: lookat=[0.40, -0.10, 0.03], distance=0.35, azimuth=90, elevation=-15
@@ -104,10 +124,13 @@ class MultiCameraVideoRecorder:
             path = self.save_dir / file_name
             imageio.mimsave(str(path), np.array(self.frames), fps=self.fps)
 
-        # Cleanup renderer
+        # Cleanup renderers
         if self._renderer is not None:
             self._renderer.close()
             self._renderer = None
+        if self._wrist_renderer is not None:
+            self._wrist_renderer.close()
+            self._wrist_renderer = None
 
 torch.backends.cudnn.benchmark = True
 
@@ -816,12 +839,15 @@ class SO101Workspace:
             print(f"New best eval reward: {eval_reward:.2f}, saved to {best_path}")
 
     def load_snapshot(self, snapshot_path: Path):
-        snapshot = torch.load(snapshot_path, map_location=self.device)
+        snapshot = torch.load(snapshot_path, map_location=self.device, weights_only=False)
         for k, v in snapshot.items():
             if k == "agent":
                 self.agent.load_state_dict(v)
             elif k == "best_eval_reward":
                 self._best_eval_reward = v
+            elif k == "cfg":
+                # Don't overwrite current cfg - allows resuming with different num_train_frames
+                pass
             else:
                 self.__dict__[k] = v
         print(f"Loaded snapshot from {snapshot_path}, iteration {self._main_loop_iterations}")
