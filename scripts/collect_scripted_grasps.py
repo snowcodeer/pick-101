@@ -24,18 +24,22 @@ from src.training.so101_factory import WristCameraWrapper
 
 
 def scripted_grasp_policy(env, add_noise: bool = True, rng: np.random.Generator = None,
-                          max_steps: int = 200):
+                          max_steps: int = 200, grasp_only: bool = False):
     """Execute scripted grasp sequence and collect trajectory.
 
-    Phases:
+    Phases (full lift):
     1. Descend with open gripper (25 steps)
     2. Close gripper (20 steps)
     3. Lift to target height (until cube_z >= 0.085)
     4. Hold at height (remaining steps to reach max_steps)
 
+    Phases (grasp_only=True):
+    1. Descend with open gripper (25 steps)
+    2. Close gripper and hold (remaining steps)
+
     Returns:
         trajectory: list of (obs, action, reward, done, info) tuples
-        success: bool - whether grasp succeeded (requires 10 hold steps)
+        success: bool - is_success for full lift, is_grasping for grasp_only
     """
     if rng is None:
         rng = np.random.default_rng()
@@ -72,10 +76,13 @@ def scripted_grasp_policy(env, add_noise: bool = True, rng: np.random.Generator 
         step_count += 1
 
         if terminated or truncated:
+            if grasp_only:
+                return trajectory, info.get('is_grasping', False)
             return trajectory, info.get('is_success', False)
 
-    # Phase 2: Close gripper (20 steps)
-    for _ in range(20):
+    # Phase 2: Close gripper (20 steps for full, remaining for grasp_only)
+    close_steps = max_steps - step_count if grasp_only else 20
+    for _ in range(close_steps):
         if step_count >= max_steps:
             break
         action = np.array([
@@ -90,7 +97,14 @@ def scripted_grasp_policy(env, add_noise: bool = True, rng: np.random.Generator 
         step_count += 1
 
         if terminated or truncated:
+            if grasp_only:
+                return trajectory, info.get('is_grasping', False)
             return trajectory, info.get('is_success', False)
+
+    # For grasp_only mode, we're done after closing
+    if grasp_only:
+        success = info.get('is_grasping', False)
+        return trajectory, success
 
     # Phase 3: Lift until target height
     while step_count < max_steps and not reached_height:
@@ -139,8 +153,13 @@ def collect_trajectories(
     image_size: int = 84,
     add_noise: bool = True,
     seed: int = 42,
+    grasp_only: bool = False,
 ):
     """Collect trajectories using scripted policy.
+
+    Args:
+        grasp_only: If True, only descend and grasp (no lifting).
+                   Success = is_grasping instead of is_success.
 
     Returns:
         all_trajectories: list of trajectories
@@ -160,12 +179,15 @@ def collect_trajectories(
     successes = 0
     total_rewards = []
 
-    for ep in tqdm(range(num_episodes), desc="Collecting trajectories"):
+    desc = "Collecting grasp-only trajectories" if grasp_only else "Collecting trajectories"
+    for ep in tqdm(range(num_episodes), desc=desc):
         # Reset with different seed each episode
         obs, info = env.reset(seed=int(rng.integers(0, 2**31)))
 
         # Collect initial observation
-        trajectory, success = scripted_grasp_policy(env, add_noise=add_noise, rng=rng)
+        trajectory, success = scripted_grasp_policy(
+            env, add_noise=add_noise, rng=rng, grasp_only=grasp_only
+        )
 
         # Prepend reset observation to trajectory
         if len(trajectory) > 0:
@@ -191,6 +213,7 @@ def collect_trajectories(
         'mean_reward': np.mean(total_rewards),
         'std_reward': np.std(total_rewards),
         'curriculum_stage': curriculum_stage,
+        'grasp_only': grasp_only,
     }
 
     return all_trajectories, stats
@@ -205,16 +228,20 @@ def main():
     parser.add_argument("--image_size", type=int, default=84, help="Image size")
     parser.add_argument("--no_noise", action="store_true", help="Disable action noise")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--grasp_only", action="store_true",
+                        help="Only descend and grasp, no lifting. Success = is_grasping.")
     args = parser.parse_args()
 
     # Create output directory
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"Collecting {args.episodes} trajectories with scripted policy...")
+    mode = "grasp-only" if args.grasp_only else "full lift"
+    print(f"Collecting {args.episodes} trajectories with scripted policy ({mode})...")
     print(f"  Curriculum stage: {args.curriculum_stage}")
     print(f"  Image size: {args.image_size}")
     print(f"  Action noise: {not args.no_noise}")
+    print(f"  Grasp only: {args.grasp_only}")
 
     trajectories, stats = collect_trajectories(
         num_episodes=args.episodes,
@@ -222,6 +249,7 @@ def main():
         image_size=args.image_size,
         add_noise=not args.no_noise,
         seed=args.seed,
+        grasp_only=args.grasp_only,
     )
 
     print(f"\nResults:")
@@ -245,6 +273,7 @@ def main():
     with open(summary_path, 'w') as f:
         f.write(f"Scripted Grasp Collection Summary\n")
         f.write(f"=================================\n\n")
+        f.write(f"Mode: {'grasp-only' if stats.get('grasp_only') else 'full lift'}\n")
         f.write(f"Episodes: {stats['num_episodes']}\n")
         f.write(f"Success rate: {stats['success_rate']*100:.1f}%\n")
         f.write(f"Successes: {stats['successes']}\n")
