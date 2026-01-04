@@ -120,11 +120,11 @@ def render_multi_camera(env: LiftCubeCartesianEnv, cameras: list[str], size: int
             cam_dir = -cam_world_mat[:, 2]  # Camera looks along -Z
 
     # Virtual camera configurations: (lookat, distance, azimuth, elevation)
+    # Matches state-based eval videos from lift_cube.py
     virtual_cameras = {
-        "topdown": ([0.35, 0.0, 0.0], 0.8, 90, -90),  # Bird's eye
-        "side": ([0.35, 0.0, 0.1], 0.7, 0, -15),      # Side view
-        "front": ([0.35, 0.0, 0.1], 0.7, 90, -15),    # Front view
-        "iso": ([0.35, 0.0, 0.1], 0.8, 135, -30),     # Isometric view
+        "closeup": ([0.40, -0.10, 0.03], 0.35, 90, -15),  # Side view close to cube
+        "wide": ([0.25, -0.05, 0.05], 0.8, 135, -25),     # Diagonal view of arm and cube
+        "wide2": ([0.25, -0.05, 0.05], 0.8, 45, -25),     # Diagonal from other side
     }
 
     for cam in cameras:
@@ -205,7 +205,7 @@ def evaluate_with_video(
     """Evaluate checkpoint and save multi-camera videos."""
 
     if cameras is None:
-        cameras = ["topdown", "wrist_cam", "side", "front"]
+        cameras = ["wrist_cam", "closeup", "wide", "wide2"]
 
     if output_dir is None:
         output_dir = snapshot_path.parent.parent / "eval_videos"
@@ -433,7 +433,7 @@ def main():
     parser.add_argument("snapshot", type=str, help="Path to snapshot file")
     parser.add_argument("--num_episodes", type=int, default=5, help="Number of episodes to evaluate")
     parser.add_argument("--output_dir", type=str, default=None, help="Output directory for videos")
-    parser.add_argument("--cameras", nargs="+", default=["topdown", "wrist_cam", "side", "front"],
+    parser.add_argument("--cameras", nargs="+", default=["wrist_cam", "closeup", "wide", "wide2"],
                        help="Camera names to render")
     parser.add_argument("--frame_size", type=int, default=256, help="Frame size for rendering")
     parser.add_argument("--curriculum_stage", type=int, default=None, help="Curriculum stage (default: from config)")
