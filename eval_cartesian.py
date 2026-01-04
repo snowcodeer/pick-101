@@ -97,6 +97,7 @@ def main():
     action_scale = args.action_scale if args.action_scale is not None else env_cfg.get("action_scale", 0.02)
     max_episode_steps = env_cfg.get("max_episode_steps", 200)
     lift_height = env_cfg.get("lift_height", 0.08)
+    hold_steps = env_cfg.get("hold_steps", 10)
     reward_version = env_cfg.get("reward_version", "v7")
 
     # Parse place_target if present
@@ -112,6 +113,7 @@ def main():
         lock_wrist=lock_wrist,
         action_scale=action_scale,
         lift_height=lift_height,
+        hold_steps=hold_steps,
         reward_version=reward_version,
         place_target=place_target,
     )
@@ -139,7 +141,7 @@ def main():
         obs = vec_env.reset()
         ep_reward = 0
 
-        for step in range(200):
+        for step in range(max_episode_steps):
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, done, info = vec_env.step(action)
             ep_reward += reward[0]
