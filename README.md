@@ -26,15 +26,26 @@ PYTHONPATH=. uv run python tests/test_topdown_pick.py --viewer
 ## Project Structure
 
 ```
-models/so101/           # Robot models and scenes
-├── so101_new_calib.xml # Current robot with finger pads
-├── lift_cube.xml       # Scene with elliptic friction
-└── assets/             # STL mesh files (Git LFS)
+models/so101/               # Robot models and scenes
+├── so101_new_calib.xml     # Current robot with finger pads
+├── lift_cube.xml           # Scene with elliptic friction
+└── assets/                 # STL mesh files (Git LFS)
 
-src/controllers/
-└── ik_controller.py    # Damped least-squares IK
+src/
+├── controllers/
+│   └── ik_controller.py    # Damped least-squares IK
+├── envs/
+│   └── lift_cube.py        # Gym environment with reward versions
+└── training/
+    ├── train_image_rl.py   # DrQ-v2 training script
+    ├── eval_checkpoint.py  # Evaluation with video generation
+    └── workspace.py        # SO101Workspace for RoboBase
 
-tests/                  # Test scripts
+configs/                    # Training configs
+├── drqv2_lift_s3_v19.yaml  # Image-based RL (working)
+└── curriculum_stage3.yaml  # State-based RL
+
+tests/                      # Test scripts
 ```
 
 ## Test Scripts
@@ -111,6 +122,41 @@ PYTHONPATH=. uv run python train_lift.py \
   --resume runs/lift_curriculum_s3/<timestamp> \
   --timesteps 500000  # Additional steps
 ```
+
+## Image-Based RL (DrQ-v2)
+
+Train an image-based RL agent using wrist camera observations:
+
+```bash
+# Train v19 reward (100% success rate at 2M steps)
+MUJOCO_GL=egl uv run python src/training/train_image_rl.py \
+    --config configs/drqv2_lift_s3_v19.yaml
+```
+
+Training takes ~8 hours on RTX 4090 for 2M steps.
+
+### Evaluate Checkpoint
+
+```bash
+MUJOCO_GL=egl uv run python src/training/eval_checkpoint.py \
+    runs/image_rl/<timestamp>/snapshots/2000000_snapshot.pt \
+    --num_episodes 10 \
+    --reward_version v19 \
+    --output_dir runs/image_rl/<timestamp>/eval
+```
+
+### X-Format Video (Side-by-Side Views)
+
+```bash
+MUJOCO_GL=egl uv run python src/training/eval_checkpoint.py \
+    runs/image_rl/<timestamp>/snapshots/2000000_snapshot.pt \
+    --num_episodes 5 \
+    --reward_version v19 \
+    --x-format \
+    --output_dir runs/image_rl/<timestamp>/eval_x_post
+```
+
+Uses v19 reward with per-finger reach and hold count bonus. Achieves 100% success rate at 2M steps.
 
 ## Robot Model Variants
 
