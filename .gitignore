@@ -1,4 +1,5 @@
 CLAUDE.md
+.claude
 .venv*
 wait_and_train.sh
 **/*.mp4

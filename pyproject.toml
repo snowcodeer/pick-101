@@ -5,10 +5,9 @@ description = "RL training for SO-101 robot manipulation (grasp, lift, place)"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "torch>=2.8.0",
-    "torchvision>=0.23.0",
-    "torchaudio>=2.8.0",
-    "pytorch-triton-rocm>=3.2.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "torchaudio>=2.0.0",
     "mujoco>=3.0.0",
     "gymnasium @ git+https://github.com/stepjam/Gymnasium.git@0.29.2",
     "stable-baselines3>=2.0.0",
@@ -27,19 +26,24 @@ dependencies = [
 [tool.uv.sources]
 robobase = { path = "external/robobase", editable = true }
 torch = [
-    { index = "pytorch-rocm" },
+    { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-cuda", marker = "sys_platform == 'win32'" },
 ]
 torchvision = [
-    { index = "pytorch-rocm" },
+    { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-cuda", marker = "sys_platform == 'win32'" },
 ]
 torchaudio = [
-    { index = "pytorch-rocm" },
-]
-pytorch-triton-rocm = [
-    { index = "pytorch-rocm" },
+    { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-cuda", marker = "sys_platform == 'win32'" },
 ]
 
 [[tool.uv.index]]
 name = "pytorch-rocm"
 url = "https://download.pytorch.org/whl/rocm6.4"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cuda"
+url = "https://download.pytorch.org/whl/cu124"
 explicit = true
