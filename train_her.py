@@ -8,6 +8,7 @@ import torch
 import yaml
 from stable_baselines3 import HerReplayBuffer, SAC
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
+from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from src.envs.pick_cube_goal import PickCubeGoalEnv
@@ -21,13 +22,14 @@ def load_config(config_path: str) -> dict:
 
 def make_env(env_cfg: dict):
     """Create the GoalEnv environment."""
-    return PickCubeGoalEnv(
+    env = PickCubeGoalEnv(
         render_mode=None,
         max_episode_steps=env_cfg.get("max_episode_steps", 200),
         action_scale=env_cfg.get("action_scale", 0.1),
         reward_type=env_cfg.get("reward_type", "sparse"),
         distance_threshold=env_cfg.get("distance_threshold", 0.03),
     )
+    return Monitor(env)
 
 
 def main():

@@ -8,6 +8,7 @@ import torch
 import yaml
 from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
+from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from src.envs.pick_cube import PickCubeEnv
@@ -21,12 +22,13 @@ def load_config(config_path: str) -> dict:
 
 def make_env(env_cfg: dict, reward_cfg: dict):
     """Create the environment."""
-    return PickCubeEnv(
+    env = PickCubeEnv(
         render_mode=None,
         max_episode_steps=env_cfg.get("max_episode_steps", 200),
         action_scale=env_cfg.get("action_scale", 0.1),
         reward_config=reward_cfg,
     )
+    return Monitor(env)
 
 
 def main():
