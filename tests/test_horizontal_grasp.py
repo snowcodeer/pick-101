@@ -8,12 +8,17 @@ with a truly horizontal gripper. The current top-down approach
 
 This script demonstrates the limitation with a raised cube (on a platform).
 """
+import sys
+from pathlib import Path
+
+# Add project root to path so we can import from src
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 import mujoco
 import mujoco.viewer
 import numpy as np
-import sys
 import time
-from pathlib import Path
 from src.controllers.ik_controller import IKController
 
 scene_path = Path("models/so101/lift_cube_horizontal.xml")
