@@ -94,6 +94,24 @@ $env:MUJOCO_GL="egl"; uv run python src/training/eval_checkpoint.py `
     --output_dir runs/image_rl/<timestamp>/eval_x_post
 ```
 
+## Visualization
+
+### Simple Robot + Petri Dish Viewer
+
+View just the robot arm and a petri dish (useful for lab automation visualization):
+
+```powershell
+uv run python visualize_arm_petri.py
+```
+
+### Camera Visualization
+
+Multiple camera views of the arm:
+
+```powershell
+$env:PYTHONPATH="."; uv run python scripts/visualize_camera.py
+```
+
 ## Notes
 
 - PowerShell uses backticks (`` ` ``) for line continuation instead of backslashes (`\`)
