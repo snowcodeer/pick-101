@@ -19,7 +19,6 @@ from robobase.envs.wrappers import (
 )
 
 from src.envs.lift_cube import LiftCubeCartesianEnv
-from src.envs.lift_petri_lid import LiftPetriLidCartesianEnv
 
 
 class SuccessInfoWrapper(gym.Wrapper):
@@ -167,26 +166,13 @@ class SO101Factory(EnvFactory):
 
     def _make_base_env(self, cfg: DictConfig) -> gym.Env:
         """Create base SO-101 environment."""
-        env_name = cfg.env.get("env_name", "so101_lift")
-
-        if env_name == "so101_lift":
-            return LiftCubeCartesianEnv(
-                render_mode="rgb_array" if cfg.pixels else None,
-                max_episode_steps=cfg.env.episode_length,
-                curriculum_stage=cfg.env.get("curriculum_stage", 3),
-                reward_version=cfg.env.get("reward_version", "v11"),
-                lock_wrist=cfg.env.get("lock_wrist", False),
-            )
-        elif env_name == "so101_lift_petri_lid":
-            return LiftPetriLidCartesianEnv(
-                render_mode="rgb_array" if cfg.pixels else None,
-                max_episode_steps=cfg.env.episode_length,
-                curriculum_stage=cfg.env.get("curriculum_stage", 3),
-                reward_version=cfg.env.get("reward_version", "v19"),
-                lock_wrist=cfg.env.get("lock_wrist", False),
-            )
-        else:
-            raise ValueError(f"Unknown environment: {env_name}")
+        return LiftCubeCartesianEnv(
+            render_mode="rgb_array" if cfg.pixels else None,
+            max_episode_steps=cfg.env.episode_length,
+            curriculum_stage=cfg.env.get("curriculum_stage", 3),
+            reward_version=cfg.env.get("reward_version", "v11"),
+            lock_wrist=cfg.env.get("lock_wrist", False),
+        )
 
     def make_train_env(self, cfg: DictConfig) -> gym.vector.VectorEnv:
         """Create vectorized training environments."""

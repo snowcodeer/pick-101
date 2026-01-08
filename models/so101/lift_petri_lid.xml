@@ -1,5 +1,5 @@
 <mujoco model="lift_petri_lid_scene">
-    <include file="so101_wide_gripper.xml" />
+    <include file="so101_new_calib.xml" />
 
     <option timestep="0.002" gravity="0 0 -9.81" noslip_iterations="3" impratio="10" cone="elliptic"/>
 

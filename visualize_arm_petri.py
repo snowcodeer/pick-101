@@ -16,7 +16,7 @@ def create_petri_dish_scene():
     """Create XML with robot arm and petri dish using existing STL files."""
     xml = """
     <mujoco model="so101_with_petri">
-        <include file="so101_wide_gripper.xml"/>
+        <include file="so101_new_calib.xml"/>
 
         <option timestep="0.002" gravity="0 0 -9.81" noslip_iterations="3" impratio="10" cone="elliptic"/>
 
