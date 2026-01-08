@@ -65,10 +65,10 @@ def create_petri_dish_scene():
                 <!-- Collision: bottom + outer wall (VISIBLE FOR DEBUG) -->
                 <!-- Bottom: 0.5mm full height (half-height=0.00025) -->
                 <geom name="dish_bottom" type="cylinder" size="0.0175 0.00025" pos="0 0 0"
-                      rgba="0 1 0 0.3" mass="0.005" friction="0.5 0.05 0.001" contype="1" conaffinity="1"/>
+                      rgba="0 1 0 0" mass="0.005" friction="0.5 0.05 0.001" contype="1" conaffinity="1"/>
                 <!-- Wall: 3.5mm full height (half-height=0.00175) -->
                 <geom name="dish_wall" type="cylinder" size="0.0175 0.00175" pos="0 0 0.002"
-                      rgba="0 1 0 0.3" mass="0.004" friction="0.5 0.05 0.001" contype="1" conaffinity="1"/>
+                      rgba="0 1 0 0" mass="0.004" friction="0.5 0.05 0.001" contype="1" conaffinity="1"/>
             </body>
 
             <!-- Petri Dish Lid: MOVABLE (with freejoint) - OD=37mm, H=2.5mm total -->
@@ -79,10 +79,10 @@ def create_petri_dish_scene():
                 <!-- Collision: flat top + graspable rim (VISIBLE FOR DEBUG) -->
                 <!-- Flat top surface: thin disk covering the dish, 0.5mm thick -->
                 <geom name="lid_top" type="cylinder" size="0.0185 0.00025" pos="0 0 0.0005"
-                      rgba="1 0 0 0.5" mass="0.001" friction="0.5 0.05 0.001" contype="1" conaffinity="1"/>
+                      rgba="1 0 0 0" mass="0.001" friction="0.5 0.05 0.001" contype="1" conaffinity="1"/>
                 <!-- Graspable rim: outer edge only, 2mm thick -->
                 <geom name="lid_skirt" type="cylinder" size="0.0185 0.001" pos="0 0 0.00175"
-                      rgba="1 0.5 0 0.7" mass="0.001" friction="0.5 0.05 0.001" contype="1" conaffinity="1"/>
+                      rgba="1 0.5 0 0" mass="0.001" friction="0.5 0.05 0.001" contype="1" conaffinity="1"/>
             </body>
         </worldbody>
     </mujoco>
