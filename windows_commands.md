@@ -43,6 +43,18 @@ Train an RL agent using low-dimensional state observations:
 $env:PYTHONPATH="."; uv run python train_lift.py --config configs/curriculum_stage3.yaml
 ```
 
+Train the petri lid (free dish base) task:
+
+```powershell
+$env:PYTHONPATH="."; uv run python train_lift_petri_lid_free_dish.py --config configs/lift_petri_lid_free_dish_500k.yaml
+```
+
+Train the petri lid (free dish base) task with curriculum stage 3:
+
+```powershell
+$env:PYTHONPATH="."; uv run python train_lift_petri_lid_free_dish.py --config configs/lift_petri_lid_free_dish_s3.yaml
+```
+
 ### Evaluation
 
 Evaluate a trained model and generate videos:
@@ -51,6 +63,14 @@ Evaluate a trained model and generate videos:
 $env:PYTHONPATH="."; uv run python eval_cartesian.py `
   --run runs/lift_curriculum_s3/<timestamp> `
   --checkpoint 1000000
+```
+
+Evaluate a petri lid (free dish base) model and generate videos:
+
+```powershell
+$env:PYTHONPATH="."; uv run python eval_petri_lid_free_dish.py `
+  --run runs/lift_petri_lid_free_dish_s3/<timestamp> `
+  --checkpoint 100000
 ```
 
 ### Resume Training
@@ -71,6 +91,20 @@ Train an RL agent using wrist camera observations:
 ```powershell
 $env:MUJOCO_GL="egl"; uv run python src/training/train_image_rl.py `
     --config configs/drqv2_lift_s3_v19.yaml
+```
+
+Train the petri lid (free dish base) task with wrist camera observations:
+
+```powershell
+$env:MUJOCO_GL="egl"; uv run python src/training/train_image_rl_petri_lid_free_dish.py `
+    --config configs/drqv2_lift_petri_lid_free_dish_v19.yaml
+```
+
+Train the petri lid (free dish base) task with curriculum stage 3:
+
+```powershell
+$env:MUJOCO_GL="egl"; uv run python src/training/train_image_rl_petri_lid_free_dish.py `
+    --config configs/drqv2_lift_petri_lid_free_dish_s3_v19.yaml
 ```
 
 ### Evaluate Checkpoint
