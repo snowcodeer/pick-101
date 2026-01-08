@@ -74,10 +74,6 @@ def is_grasping():
     contacts = get_contacts()
     has_static = static_pad_geom_id in contacts
     has_moving = moving_pad_geom_id in contacts
-    # Debug: print contact geom names
-    if contacts:
-        contact_names = [model.geom(g).name for g in contacts]
-        print(f"   DEBUG contacts: {contact_names}, static={has_static}, moving={has_moving}")
     return has_static and has_moving
 
 
@@ -111,12 +107,12 @@ def pick_up_lid(lid_pos, viewer=None):
 
     Adapted from ECE4560 SO-101 assignment.
     """
-    height_offset = 0.01  # 10mm above lid
-    gripper_open = 0.3   # partially open (ECE4560 uses 50/100, not fully open)
-    gripper_closed = -0.8  # tighter grip
+    height_offset = 0.03  # 30mm above lid
+    gripper_open = -0.2   # slightly open (ECE4560 uses 50/100, not fully open)
+    gripper_closed = -0.3  # gentle grip
 
     # Lid is thin, position fingertips slightly above lid surface to avoid pushing through base
-    grasp_z_offset = 0.003  # 3mm above lid top to grasp rim properly
+    grasp_z_offset = 0.002  # 3mm above lid top to grasp rim properly
 
     # With wrist_roll=90°, fingers spread along Y axis
     # Offset to center grip on lid (static finger is offset from gripperframe)
@@ -172,13 +168,13 @@ def pick_up_lid(lid_pos, viewer=None):
     print(f"\n3. Closing gripper...")
     contact_step = None
     contact_action = None
-    tighten_amount = 0.4  # How much to tighten after contact
+    tighten_amount = 0.05  # How much to tighten after contact
     grasp_action = gripper_closed
 
     for step in range(300):
         if contact_step is None:
             # Close gradually until contact
-            t = min(step / 250, 1.0)
+            t = min(step / 800, 1.0)
             gripper = gripper_open - 2.0 * t  # 1.0 to -1.0 over 250 steps
         else:
             # After contact, slowly tighten
@@ -187,7 +183,7 @@ def pick_up_lid(lid_pos, viewer=None):
             target_action = max(contact_action - tighten_amount, -1.0)
             gripper = contact_action + (target_action - contact_action) * t_slow
 
-        ctrl = ik.step_toward_target(grasp_target, gripper_action=gripper, gain=0.1, locked_joints=locked_joints)
+        ctrl = ik.step_toward_target(grasp_target, gripper_action=gripper, gain=0.05, locked_joints=locked_joints)
         ctrl[3] = np.pi/2  # Force wrist_flex vertical
         ctrl[4] = np.pi/2  # Force wrist_roll
         data.ctrl[:] = ctrl
