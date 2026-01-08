@@ -1,7 +1,7 @@
 """Simple visualization of SO-101 arm with a petri dish.
 
-Shows just the robot and a petri dish.
-Potential lab automation scenarios.
+Shows the SO-101 robot with wide gripper and a scaled-down petri dish (35mm base, 37mm lid).
+The dish base is fixed, and the lid is movable with visible collision geometry for debugging.
 
 Usage:
     python visualize_arm_petri.py
@@ -16,7 +16,7 @@ def create_petri_dish_scene():
     """Create XML with robot arm and petri dish using existing STL files."""
     xml = """
     <mujoco model="so101_with_petri">
-        <include file="so101_new_calib.xml"/>
+        <include file="so101_wide_gripper.xml"/>
 
         <option timestep="0.002" gravity="0 0 -9.81" noslip_iterations="3" impratio="10" cone="elliptic"/>
 
@@ -42,13 +42,13 @@ def create_petri_dish_scene():
             <material name="groundplane" texture="groundplane" texuniform="true"
                       texrepeat="5 5" reflectance="0.2"/>
 
-            <!-- Petri dish meshes (already in assets/) - scale from mm to m -->
-            <mesh name="petri_dish" file="petri_dish.STL" scale="0.001 0.001 0.001"/>
-            <mesh name="petri_dish_lid" file="petri_dish_lid.STL" scale="0.001 0.001 0.001"/>
+            <!-- Petri dish meshes (scaled down to 35mm/37mm from 87mm/91mm) -->
+            <mesh name="petri_dish" file="petri_dish.STL" scale="0.000402 0.000402 0.000402"/>
+            <mesh name="petri_dish_lid" file="petri_dish_lid.STL" scale="0.000407 0.000407 0.000407"/>
 
             <!-- Petri dish materials -->
             <material name="dish_plastic" rgba="0.85 0.85 0.9 0.5" shininess="0.9" specular="0.8"/>
-            <material name="dish_lid" rgba="0.8 0.8 0.85 0.3" shininess="0.9" specular="0.8"/>
+            <material name="lid_plastic" rgba="0.8 0.8 0.85 0.3" shininess="0.9" specular="0.8"/>
         </asset>
 
         <worldbody>
@@ -58,28 +58,31 @@ def create_petri_dish_scene():
             <!-- Ground plane -->
             <geom name="floor" size="0 0 0.05" pos="0 0 0" type="plane" material="groundplane"/>
 
-            <!-- Petri Dish: OD=87.16mm, ID=85.76mm, H=14mm -->
-            <body name="petri_dish" pos="0.3 0 0.001">
-                <freejoint name="petri_dish"/>
+            <!-- Petri Dish Base: FIXED (no freejoint) - OD=35mm, H=4mm total -->
+            <body name="petri_dish" pos="0.25 0 0.001">
                 <!-- Visual mesh (no collision) -->
                 <geom type="mesh" mesh="petri_dish" material="dish_plastic" contype="0" conaffinity="0" group="0"/>
-                <!-- Collision: bottom + outer wall -->
-                <geom name="dish_bottom" type="cylinder" size="0.04288 0.002" pos="0 0 0"
-                      rgba="0 0 0 0" mass="0.008" friction="0.5 0.05 0.001" contype="1" conaffinity="1"/>
-                <geom name="dish_wall" type="cylinder" size="0.04358 0.007" pos="0 0 0.007"
-                      rgba="0 0 0 0" mass="0.007" friction="0.5 0.05 0.001" contype="1" conaffinity="1"/>
+                <!-- Collision: bottom + outer wall (VISIBLE FOR DEBUG) -->
+                <!-- Bottom: 0.5mm full height (half-height=0.00025) -->
+                <geom name="dish_bottom" type="cylinder" size="0.0175 0.00025" pos="0 0 0"
+                      rgba="0 1 0 0.3" mass="0.005" friction="0.5 0.05 0.001" contype="1" conaffinity="1"/>
+                <!-- Wall: 3.5mm full height (half-height=0.00175) -->
+                <geom name="dish_wall" type="cylinder" size="0.0175 0.00175" pos="0 0 0.002"
+                      rgba="0 1 0 0.3" mass="0.004" friction="0.5 0.05 0.001" contype="1" conaffinity="1"/>
             </body>
 
-            <!-- Petri Dish Lid: OD=91mm, ID=89.6mm, H=8mm (fits over dish) -->
-            <body name="petri_dish_lid" pos="0.3 0 0.0155" quat="0 1 0 0">
-                <freejoint name="petri_dish_lid"/>
-                <!-- Visual mesh (no collision) -->
-                <geom type="mesh" mesh="petri_dish_lid" material="dish_lid" contype="0" conaffinity="0" group="0"/>
-                <!-- Collision: top disk + skirt -->
-                <geom name="lid_top" type="cylinder" size="0.0455 0.002" pos="0 0 0"
-                      rgba="0 0 0 0" mass="0.003" friction="0.5 0.05 0.001" contype="1" conaffinity="1"/>
-                <geom name="lid_skirt" type="cylinder" size="0.0455 0.004" pos="0 0 -0.004"
-                      rgba="0 0 0 0" mass="0.002" friction="0.5 0.05 0.001" contype="1" conaffinity="1"/>
+            <!-- Petri Dish Lid: MOVABLE (with freejoint) - OD=37mm, H=2.5mm total -->
+            <body name="petri_lid" pos="0.25 0 0.0155" quat="0 1 0 0">
+                <freejoint name="petri_lid_joint"/>
+                <!-- Visual mesh (no collision, no mass) -->
+                <geom type="mesh" mesh="petri_dish_lid" material="lid_plastic" contype="0" conaffinity="0" group="0" mass="0"/>
+                <!-- Collision: flat top + graspable rim (VISIBLE FOR DEBUG) -->
+                <!-- Flat top surface: thin disk covering the dish, 0.5mm thick -->
+                <geom name="lid_top" type="cylinder" size="0.0185 0.00025" pos="0 0 0.0005"
+                      rgba="1 0 0 0.5" mass="0.001" friction="0.5 0.05 0.001" contype="1" conaffinity="1"/>
+                <!-- Graspable rim: outer edge only, 2mm thick -->
+                <geom name="lid_skirt" type="cylinder" size="0.0185 0.001" pos="0 0 0.00175"
+                      rgba="1 0.5 0 0.7" mass="0.001" friction="0.5 0.05 0.001" contype="1" conaffinity="1"/>
             </body>
         </worldbody>
     </mujoco>
@@ -145,7 +148,7 @@ def main():
         object_joints = []
         for i in range(model.njnt):
             joint_name = model.joint(i).name
-            if 'dish' in joint_name or 'lid' in joint_name:
+            if 'lid' in joint_name:
                 object_joints.append((i, joint_name))
             else:
                 robot_joints.append((i, joint_name))
@@ -155,9 +158,11 @@ def main():
             print(f"  {i}: {name}")
 
         if object_joints:
-            print(f"\nScene objects with {len(object_joints)} freejoints:")
+            print(f"\nPetri dish lid (movable) with freejoint:")
             for i, name in object_joints:
                 print(f"  {i}: {name}")
+
+        print(f"\nPetri dish base: FIXED (no freejoint)")
 
         # Launch viewer
         with mujoco.viewer.launch_passive(model, data) as viewer:
