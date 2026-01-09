@@ -2,11 +2,11 @@
 
 Adapted from lift_cube.py for petri dish lid manipulation.
 Key differences:
-- Lid is thinner (8mm vs 30mm cube)
+- Lid is much thinner (1.25mm vs 30mm cube)
 - Lid is lighter (5g vs 30g)
-- Lid has larger diameter (91mm vs 30mm)
-- Two collision geoms: top disk + skirt
-- Tighter gripper threshold (0.20 vs 0.25)
+- Lid diameter: 37mm (radius 18.5mm)
+- Two collision geoms: top disk (0.25mm) + skirt (1mm)
+- Tighter gripper threshold (0.20 vs 0.25) for delicate manipulation
 """
 from pathlib import Path
 from typing import Any
@@ -45,9 +45,8 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         hold_steps: int = 10,
         reward_type: str = "dense",
         reward_version: str = "v19",
-        curriculum_stage: int = 0,  # 0=normal, 1=lid in gripper lifted, 2=lid in gripper on table, 3=gripper near lid
+        curriculum_stage: int = 0,  # Initial condition: 0=full task, 1=lid held lifted, 2=lid held on table, 3=gripper near lid, 4=gripper far
         lock_wrist: bool = False,  # Lock wrist joints for stable grasping
-        gripper_rate: float = 0.02,  # Max gripper action change per step
     ):
         super().__init__()
 
@@ -60,14 +59,12 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         self.reward_version = reward_version
         self.curriculum_stage = curriculum_stage
         self.lock_wrist = lock_wrist
-        self.gripper_rate = gripper_rate
         self._step_count = 0
         self._hold_count = 0
         self._was_grasping = False
         self._reset_gripper_action = None
         self._prev_action = np.zeros(4)
         self._open_gripper_count = 0
-        self._gripper_action = None
         self._dish_start_pos = None
 
         # Load model
@@ -150,18 +147,6 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         gripper_qpos_addr = self.model.jnt_qposadr[gripper_joint_id]
         return self.data.qpos[gripper_qpos_addr]
 
-    def _update_gripper_action(self, target: float) -> float:
-        if self._gripper_action is None:
-            self._gripper_action = target
-        else:
-            delta = np.clip(
-                target - self._gripper_action,
-                -self.gripper_rate,
-                self.gripper_rate,
-            )
-            self._gripper_action += delta
-        return self._gripper_action
-
     def _set_dish_pose(self, pos: np.ndarray | None = None):
         if pos is None:
             pos = np.array([0.25, 0.0, 0.001], dtype=np.float64)
@@ -223,7 +208,11 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         gripper_to_lid = np.linalg.norm(gripper_pos - lid_pos)
         lid_z = lid_pos[2]
         is_grasping = self._is_grasping()
-        is_lifted = is_grasping and lid_z > self.lift_height
+        is_lifted = is_grasping and lid_z >= self.lift_height
+
+        # Check dish hasn't moved significantly (threshold: 1cm displacement)
+        dish_disp = np.linalg.norm(dish_pos - self._dish_start_pos) if self._dish_start_pos is not None else 0.0
+        dish_stable = dish_disp < 0.01  # Dish should stay within 1cm of start position
 
         has_gripper_contact, has_jaw_contact = self._check_lid_contacts()
 
@@ -234,12 +223,14 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
             "gripper_pos": gripper_pos.copy(),
             "gripper_state": self._get_gripper_state(),
             "dish_pos": dish_pos.copy(),
+            "dish_disp": dish_disp,
+            "dish_stable": dish_stable,
             "has_gripper_contact": has_gripper_contact,
             "has_jaw_contact": has_jaw_contact,
             "is_grasping": is_grasping,
             "is_lifted": is_lifted,
             "hold_count": self._hold_count,
-            "is_success": self._hold_count >= self.hold_steps,
+            "is_success": self._hold_count >= self.hold_steps and dish_stable,
         }
 
     def reset(
@@ -249,9 +240,6 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
 
         mujoco.mj_resetData(self.model, self.data)
 
-        self._set_dish_pose()
-        self._dish_start_pos = self.data.qpos[self._dish_qpos_addr : self._dish_qpos_addr + 3].copy()
-
         # Get lid joint info
         lid_joint_id = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_JOINT, "petri_lid_joint"
@@ -259,27 +247,33 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         lid_qpos_addr = self.model.jnt_qposadr[lid_joint_id]
 
         if self.curriculum_stage == 0:
-            # Stage 0: Normal - lid on dish, arm at home position
+            # Initial condition 0: Full task - lid on dish, arm at home position
             if self.np_random is not None:
-                lid_x = 0.30 + self.np_random.uniform(-0.03, 0.03)
-                lid_y = 0.0 + self.np_random.uniform(-0.03, 0.03)
+                # Randomize dish+lid together
+                dish_x = 0.30 + self.np_random.uniform(-0.03, 0.03)
+                dish_y = 0.0 + self.np_random.uniform(-0.03, 0.03)
+                self._set_dish_pose(pos=np.array([dish_x, dish_y, 0.001]))
+
+                # Place lid on top of dish
+                lid_x, lid_y = dish_x, dish_y
                 self.data.qpos[lid_qpos_addr : lid_qpos_addr + 3] = [lid_x, lid_y, 0.0155]
                 self.data.qpos[lid_qpos_addr + 3 : lid_qpos_addr + 7] = [0, 1, 0, 0]  # Upside down (fits on dish)
 
         elif self.curriculum_stage == 1:
-            # Stage 1: Lid in closed gripper at lift height (easiest - just hold)
+            # Initial condition 1: Lid in closed gripper at lift height (easiest - just hold)
             self._reset_with_lid_in_gripper(lid_qpos_addr, lift_height=self.lift_height)
 
         elif self.curriculum_stage == 2:
-            # Stage 2: Lid in closed gripper at table level (need to lift)
+            # Initial condition 2: Lid in closed gripper at table level (need to lift)
             self._reset_with_lid_in_gripper(lid_qpos_addr, lift_height=0.03)
 
         elif self.curriculum_stage == 3:
-            # Stage 3: Gripper near lid, open (need to close and lift)
+            # Initial condition 3: Gripper near lid, open (need to close and lift)
+            # Used by grasp_stage1, grasp_stage2, grasp_stage3 training configs
             self._reset_gripper_near_lid(lid_qpos_addr)
 
         elif self.curriculum_stage == 4:
-            # Stage 4: Gripper far from lid (need to reach, descend, grasp, lift)
+            # Initial condition 4: Gripper far from lid (need to reach, descend, grasp, lift)
             self._reset_gripper_far_from_lid(lid_qpos_addr)
 
         mujoco.mj_forward(self.model, self.data)
@@ -292,28 +286,32 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         self._was_grasping = False
         self._prev_action = np.zeros(4)
         self._open_gripper_count = 0
-        self._gripper_action = None
         self._dish_start_pos = self.data.qpos[self._dish_qpos_addr : self._dish_qpos_addr + 3].copy()
 
         return self._get_obs(), self._get_info()
 
     def _reset_with_lid_in_gripper(self, lid_qpos_addr: int, lift_height: float):
         """Reset with lid grasped in gripper at specified height."""
-        self._set_dish_pose()
-        # Constants adapted from cube implementation
+        # Constants from test_topdown_pick_lid_free_dish.py (proven to work for 1.25mm lid)
         height_offset = 0.03
-        gripper_open = 0.3
-        gripper_closed = -0.8
-        grasp_z_offset = 0.005
+        gripper_open = -0.2  # Already somewhat closed (not wide open)
+        gripper_closed = -0.3  # Gentle close for thin lid
+        grasp_z_offset = 0.002  # 2mm above lid center (not 5mm)
         finger_width_offset = -0.015
         locked_joints = [3, 4]
 
-        # Randomize lid position slightly
+        # Randomize dish+lid position together
         if self.np_random is not None:
-            lid_x = 0.25 + self.np_random.uniform(-0.02, 0.02)
-            lid_y = 0.0 + self.np_random.uniform(-0.02, 0.02)
+            dish_x = 0.25 + self.np_random.uniform(-0.02, 0.02)
+            dish_y = 0.0 + self.np_random.uniform(-0.02, 0.02)
         else:
-            lid_x, lid_y = 0.25, 0.0
+            dish_x, dish_y = 0.25, 0.0
+
+        # Place dish at randomized position
+        self._set_dish_pose(pos=np.array([dish_x, dish_y, 0.001]))
+
+        # Place lid on top of dish (same XY)
+        lid_x, lid_y = dish_x, dish_y
         lid_z = 0.0155  # Resting on dish
 
         # Place lid on dish
@@ -355,12 +353,12 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         # Step 3: Close gripper with contact detection
         contact_step = None
         contact_action = None
-        tighten_amount = 0.4
+        tighten_amount = 0.02  # Very gentle tightening - less than test script to avoid gripping base
         grasp_action = gripper_closed
 
         for step in range(300):
             if contact_step is None:
-                t = min(step / 250, 1.0)
+                t = min(step / 800, 1.0)  # Slow closing - matches test script
                 gripper = gripper_open - 2.0 * t
             else:
                 steps_since = step - contact_step
@@ -368,7 +366,7 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
                 target_action = max(contact_action - tighten_amount, -1.0)
                 gripper = contact_action + (target_action - contact_action) * t_slow
 
-            ctrl = self.ik.step_toward_target(grasp_target, gripper_action=gripper, gain=0.5, locked_joints=locked_joints)
+            ctrl = self.ik.step_toward_target(grasp_target, gripper_action=gripper, gain=0.05, locked_joints=locked_joints)
             ctrl[3] = np.pi / 2
             ctrl[4] = np.pi / 2
             self.data.ctrl[:] = ctrl
@@ -390,23 +388,40 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         if contact_step is not None and gripper > max(contact_action - tighten_amount, -1.0) + 0.01:
             grasp_action = gripper
 
+        # Step 4: Lift to target height (if specified)
+        if lift_height > 0.03:  # Only lift if target is above table level
+            lift_target = grasp_target.copy()
+            lift_target[2] = lift_height + 0.003  # Lift 3mm above target to ensure threshold is met
+            for _ in range(400):  # Slow, steady lift
+                ctrl = self.ik.step_toward_target(lift_target, gripper_action=grasp_action, gain=0.3, locked_joints=locked_joints)
+                ctrl[3] = np.pi / 2
+                ctrl[4] = np.pi / 2
+                self.data.ctrl[:] = ctrl
+                mujoco.mj_step(self.model, self.data)
+
         # Store the gripper action for curriculum learning
         self._reset_gripper_action = grasp_action
 
     def _reset_gripper_near_lid(self, lid_qpos_addr: int):
         """Reset with gripper positioned above lid, open, ready to grasp."""
-        self._set_dish_pose()
+        # Constants from test_topdown_pick_lid_free_dish.py (proven to work for 1.25mm lid)
         height_offset = 0.03
-        gripper_open = 0.3
-        grasp_z_offset = 0.005
+        gripper_open = -0.2  # Already somewhat closed (not wide open)
+        grasp_z_offset = 0.002  # 2mm above lid center (not 5mm)
         finger_width_offset = -0.015
 
-        # Randomize lid position
+        # Randomize dish+lid position together (they should be aligned)
         if self.np_random is not None:
-            lid_x = 0.25 + self.np_random.uniform(-0.02, 0.02)
-            lid_y = 0.0 + self.np_random.uniform(-0.02, 0.02)
+            dish_x = 0.25 + self.np_random.uniform(-0.02, 0.02)
+            dish_y = 0.0 + self.np_random.uniform(-0.02, 0.02)
         else:
-            lid_x, lid_y = 0.25, 0.0
+            dish_x, dish_y = 0.25, 0.0
+
+        # Place dish at randomized position
+        self._set_dish_pose(pos=np.array([dish_x, dish_y, 0.001]))
+
+        # Place lid on top of dish (same XY position)
+        lid_x, lid_y = dish_x, dish_y
         lid_z = 0.0155
 
         # Place lid on dish
@@ -443,15 +458,21 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
 
     def _reset_gripper_far_from_lid(self, lid_qpos_addr: int):
         """Reset with gripper positioned further from lid - must reach first."""
-        self._set_dish_pose()
-        gripper_open = 0.3
+        # From test_topdown_pick_lid_free_dish.py (proven to work for 1.25mm lid)
+        gripper_open = -0.2  # Already somewhat closed (not wide open)
 
-        # Randomize lid position
+        # Randomize dish+lid position together
         if self.np_random is not None:
-            lid_x = 0.25 + self.np_random.uniform(-0.02, 0.02)
-            lid_y = 0.0 + self.np_random.uniform(-0.02, 0.02)
+            dish_x = 0.25 + self.np_random.uniform(-0.02, 0.02)
+            dish_y = 0.0 + self.np_random.uniform(-0.02, 0.02)
         else:
-            lid_x, lid_y = 0.25, 0.0
+            dish_x, dish_y = 0.25, 0.0
+
+        # Place dish at randomized position
+        self._set_dish_pose(pos=np.array([dish_x, dish_y, 0.001]))
+
+        # Place lid on top of dish (same XY)
+        lid_x, lid_y = dish_x, dish_y
         lid_z = 0.0155
 
         # Place lid on dish
@@ -519,8 +540,6 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         gripper_target = gripper_action
         if self.lock_wrist and self._reset_gripper_action is not None:
             gripper_target = self._reset_gripper_action
-
-        gripper_target = self._update_gripper_action(gripper_target)
 
         # Use IK to compute joint controls
         if self.lock_wrist:
@@ -605,16 +624,39 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         if gripper_reach < reach_threshold:
             reach_reward = gripper_reach
         else:
-            if is_closed:
-                moving_reach = 1.0
-            else:
-                moving_finger_pos = self._get_moving_finger_pos()
-                moving_to_lid = np.linalg.norm(moving_finger_pos - lid_pos)
-                moving_reach = 1.0 - np.tanh(10.0 * moving_to_lid)
+            # Always check actual moving finger distance (no shortcut for closing)
+            moving_finger_pos = self._get_moving_finger_pos()
+            moving_to_lid = np.linalg.norm(moving_finger_pos - lid_pos)
+            moving_reach = 1.0 - np.tanh(10.0 * moving_to_lid)
 
             reach_reward = (gripper_reach + moving_reach) * 0.5
 
         reward += reach_reward
+
+        # Height alignment reward - encourage descending to correct grasp height
+        grasp_z_offset = 0.005  # Target: 5mm above lid center
+        target_grasp_z = lid_z + grasp_z_offset
+        gripper_z = info["gripper_pos"][2]
+        z_error = abs(gripper_z - target_grasp_z)
+
+        # Height alignment reward - always reward being at correct height
+        if gripper_reach > 0.7:
+            height_alignment = 1.0 - np.tanh(50.0 * z_error)
+            reward += height_alignment * 0.5  # Always reward correct height (stacks with everything)
+
+        # Contact rewards - ALWAYS reward contacts (especially during closing!)
+        has_gripper_contact, has_jaw_contact = self._check_lid_contacts()
+        if gripper_reach > 0.7 and z_error < 0.01:  # At correct height
+            if has_gripper_contact or has_jaw_contact:
+                reward += 1.0  # Strong reward for any contact
+            if has_gripper_contact and has_jaw_contact:
+                reward += 1.5  # Very strong reward for bilateral contact
+
+        # Closing incentive - reward closing action when at correct height
+        if gripper_reach > 0.7 and z_error < 0.01 and action is not None:
+            # Negative gripper action = closing (contacts will form during closing)
+            if action[3] < -0.3:  # Actively closing
+                reward += 1.0  # Strong incentive to close at correct height
 
         # Push-down penalty
         if lid_z < 0.01:
@@ -625,9 +667,9 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         if was_grasping and not is_grasping:
             reward -= 2.0
 
-        # Grasp bonus
+        # Grasp bonus - stacks with contact rewards (contacts persist during grasp)
         if is_grasping:
-            reward += 1.5
+            reward += 5.0  # Strong bonus on top of contact rewards (total ~8.7)
 
             # Gentle grasp bonus (target ~ -0.30 for thin lid)
             gentle_target = -0.30
@@ -661,13 +703,195 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         # Penalize pushing the dish base (freejoint drift)
         if self._dish_start_pos is not None:
             dish_disp = np.linalg.norm(dish_pos - self._dish_start_pos)
-            reward -= dish_disp * 10.0
+            reward -= dish_disp * 3.0  # Reduced from 10.0 - was too harsh, prevented learning
+
+        # Gripper jitter penalty - penalize rapid gripper changes when near grasp
+        if action is not None and self._prev_action is not None and gripper_reach > 0.7:
+            gripper_delta = abs(action[3] - self._prev_action[3])
+            reward -= gripper_delta * 1.0  # Penalize rapid gripper oscillations
 
         # Action rate penalty during hold phase
         if action is not None and lid_z > self.lift_height and hold_count > 0:
             action_delta = action - self._prev_action
             action_penalty = 0.02 * np.sum(action_delta**2)
             reward -= action_penalty
+
+        # Success bonus
+        if info["is_success"]:
+            reward += 10.0
+
+        return reward
+
+    def _reward_v20(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
+        """V20: First proper reward designed for delicate petri lid grasping.
+
+        Key features for thin (1.25mm) lid manipulation:
+        - Dual reach (gripper + moving finger) for precise positioning
+        - Height alignment reward to guide descent to correct grasp height
+        - Contact detection rewards (bilateral grasping)
+        - Closing incentive when positioned correctly
+        - Stacking rewards (no cliffs) for smooth learning
+        - Gripper jitter penalty for stable control
+        - Direct gripper control (no rate limiting)
+        - Gentle grasp pressure targeting
+        """
+        reward = 0.0
+        lid_pos = info["lid_pos"]
+        lid_z = info["lid_z"]
+        gripper_to_lid = info["gripper_to_lid"]
+        gripper_state = info["gripper_state"]
+        is_grasping = info["is_grasping"]
+        hold_count = info["hold_count"]
+        is_closed = gripper_state < 0.20  # Tighter threshold for thin lid
+        dish_pos = info["dish_pos"]
+
+        # Standard gripper reach
+        gripper_reach = 1.0 - np.tanh(10.0 * gripper_to_lid)
+
+        # Moving finger reach - only applies when gripper is close to lid
+        reach_threshold = 0.7
+        if gripper_reach < reach_threshold:
+            reach_reward = gripper_reach
+        else:
+            # Always check actual moving finger distance (no shortcut for closing)
+            moving_finger_pos = self._get_moving_finger_pos()
+            moving_to_lid = np.linalg.norm(moving_finger_pos - lid_pos)
+            moving_reach = 1.0 - np.tanh(10.0 * moving_to_lid)
+
+            reach_reward = (gripper_reach + moving_reach) * 0.5
+
+        reward += reach_reward
+
+        # Height alignment reward - always reward being at correct height
+        grasp_z_offset = 0.005  # Target: 5mm above lid center
+        target_grasp_z = lid_z + grasp_z_offset
+        gripper_z = info["gripper_pos"][2]
+        z_error = abs(gripper_z - target_grasp_z)
+
+        if gripper_reach > 0.7:
+            height_alignment = 1.0 - np.tanh(50.0 * z_error)
+            reward += height_alignment * 0.5  # Always reward correct height (stacks with everything)
+
+        # Contact rewards - ALWAYS reward contacts (especially during closing!)
+        has_gripper_contact, has_jaw_contact = self._check_lid_contacts()
+        if gripper_reach > 0.7 and z_error < 0.01:  # At correct height
+            if has_gripper_contact or has_jaw_contact:
+                reward += 1.0  # Strong reward for any contact
+            if has_gripper_contact and has_jaw_contact:
+                reward += 1.5  # Very strong reward for bilateral contact
+
+        # Closing incentive - reward closing action when at correct height
+        if gripper_reach > 0.7 and z_error < 0.01 and action is not None:
+            # Negative gripper action = closing (contacts will form during closing)
+            if action[3] < -0.3:  # Actively closing
+                reward += 1.0  # Strong incentive to close at correct height
+
+        # Push-down penalty
+        if lid_z < 0.01:
+            push_penalty = (0.01 - lid_z) * 50.0
+            reward -= push_penalty
+
+        # Drop penalty
+        if was_grasping and not is_grasping:
+            reward -= 2.0
+
+        # Grasp bonus - stacks with contact rewards (contacts persist during grasp)
+        if is_grasping:
+            reward += 5.0  # Strong bonus on top of contact rewards (total ~9.0)
+
+            # Gentle grasp bonus (target ~ -0.30 for thin lid)
+            gentle_target = -0.30
+            gentle_band = 0.10  # reward within [-0.40, -0.20]
+            gentle_delta = abs(gripper_state - gentle_target)
+            if gentle_delta <= gentle_band:
+                reward += (1.0 - gentle_delta / gentle_band) * 0.6
+            else:
+                reward -= (gentle_delta - gentle_band) * 1.0
+
+            # Continuous lift reward
+            lift_progress = max(0, lid_z - 0.0155) / (self.lift_height - 0.0155)  # 0.0155 = lid resting height
+            reward += lift_progress * 4.0
+
+            # Binary lift bonus at 0.02m
+            if lid_z > 0.02:
+                reward += 1.0
+
+            # Linear threshold ramp from 0.04m to lift_height
+            if lid_z > 0.04:
+                threshold_progress = min(1.0, (lid_z - 0.04) / (self.lift_height - 0.04))
+                reward += threshold_progress * 2.0
+
+        # Target height bonus
+        if lid_z > self.lift_height:
+            reward += 1.0
+
+            # Hold count bonus - escalating reward for sustained height
+            reward += 0.5 * hold_count
+
+        # Penalize pushing the dish base (freejoint drift)
+        if self._dish_start_pos is not None:
+            dish_disp = np.linalg.norm(dish_pos - self._dish_start_pos)
+            reward -= dish_disp * 3.0  # Reduced from 10.0 - was too harsh, prevented learning
+
+        # Gripper jitter penalty - penalize rapid gripper changes when near grasp
+        if action is not None and self._prev_action is not None and gripper_reach > 0.7:
+            gripper_delta = abs(action[3] - self._prev_action[3])
+            reward -= gripper_delta * 1.0  # Penalize rapid gripper oscillations
+
+        # Action rate penalty during hold phase
+        if action is not None and lid_z > self.lift_height and hold_count > 0:
+            action_delta = action - self._prev_action
+            action_penalty = 0.02 * np.sum(action_delta**2)
+            reward -= action_penalty
+
+        # Success bonus
+        if info["is_success"]:
+            reward += 10.0
+
+        return reward
+
+    def _reward_v21(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
+        """V21: Simplified reward inspired by cube lifting.
+
+        Minimal complexity - let the agent figure out the details.
+        Based on cube reward structure which works well.
+        """
+        reward = 0.0
+        lid_z = info["lid_z"]
+        gripper_to_lid = info["gripper_to_lid"]
+        is_grasping = info["is_grasping"]
+        dish_pos = info["dish_pos"]
+        hold_count = info["hold_count"]
+
+        # Reach: encourage gripper to approach lid
+        reach_reward = 1.0 - np.tanh(10.0 * gripper_to_lid)
+        reward += reach_reward
+
+        # Contact bonus: bilateral contact = good positioning
+        has_gripper_contact, has_jaw_contact = self._check_lid_contacts()
+        if has_gripper_contact and has_jaw_contact:
+            reward += 0.5
+
+        # Grasp bonus: lid held between fingers
+        if is_grasping:
+            reward += 1.0
+
+        # Lift bonus: lid raised above dish
+        if lid_z > 0.02:
+            reward += 2.0
+
+        # Target height bonus
+        if lid_z > self.lift_height:
+            reward += 1.0
+
+        # Drop penalty
+        if was_grasping and not is_grasping:
+            reward -= 2.0
+
+        # Penalize pushing the dish base
+        if self._dish_start_pos is not None:
+            dish_disp = np.linalg.norm(dish_pos - self._dish_start_pos)
+            reward -= dish_disp * 3.0  # Reduced from 10.0 - was too harsh, prevented learning
 
         # Success bonus
         if info["is_success"]:
@@ -706,4 +930,3 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         if self._renderer is not None:
             self._renderer.close()
             self._renderer = None
-

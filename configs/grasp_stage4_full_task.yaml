@@ -1,0 +1,42 @@
+# Stage 4: Learn to reach, grasp, and lift
+# Gripper far from lid - need full approach
+# Focus: Reaching + descending + grasping + lifting
+experiment:
+  name: "grasp_stage4_full_task"
+  base_dir: "runs"
+
+training:
+  timesteps: 600000
+  eval_freq: 10000
+  save_freq: 100000
+  seed: 42
+  pretrained: null  # Set to stage3 model path
+
+sac:
+  learning_rate: 3.0e-4
+  buffer_size: 500000
+  learning_starts: 15000
+  batch_size: 256
+  tau: 0.005
+  gamma: 0.99
+  train_freq: 1
+  gradient_steps: 1
+  ent_coef: 'auto_0.1'
+  target_entropy: 'auto'
+
+env:
+  normalize_obs: true
+  normalize_reward: true
+  max_episode_steps: 250  # Time to reach, grasp, and lift
+  action_scale: 0.012  # More range for reaching
+  lift_height: 0.08
+  hold_steps: 10
+  reward_type: "dense"
+  reward_version: "v20"
+  curriculum_stage: 4  # Stage 4: Gripper far from lid
+  lock_wrist: true  # Lock wrist for stability
+
+eval:
+  episodes: 10
+  video_width: 640
+  video_height: 480

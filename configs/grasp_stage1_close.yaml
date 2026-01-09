@@ -1,0 +1,41 @@
+# Stage 1: Learn to hold grasped lid
+# Lid already in gripper, lifted - easiest (just maintain hold)
+# Focus: Maintaining grasp at target height
+experiment:
+  name: "grasp_stage1_close"
+  base_dir: "runs"
+
+training:
+  timesteps: 150000  # Focused on grasping only
+  eval_freq: 5000
+  save_freq: 25000
+  seed: 42
+
+sac:
+  learning_rate: 3.0e-4
+  buffer_size: 200000
+  learning_starts: 5000
+  batch_size: 256
+  tau: 0.005
+  gamma: 0.99
+  train_freq: 1
+  gradient_steps: 1
+  ent_coef: 'auto_0.1'
+  target_entropy: 'auto'
+
+env:
+  normalize_obs: true
+  normalize_reward: true
+  max_episode_steps: 100  # Short episodes - just hold
+  action_scale: 0.006  # Very gentle for delicate lid
+  lift_height: 0.08  # Target lift height
+  hold_steps: 10  # Hold at target height
+  reward_type: "dense"
+  reward_version: "v20"
+  curriculum_stage: 1  # Stage 1: Lid already in gripper, lifted
+  lock_wrist: true  # Lock wrist for stability
+
+eval:
+  episodes: 10
+  video_width: 640
+  video_height: 480

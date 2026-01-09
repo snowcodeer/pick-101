@@ -27,10 +27,9 @@ env:
   lift_height: 0.08
   hold_steps: 10
   reward_type: "dense"
-  reward_version: "v19"
+  reward_version: "v20"
   curriculum_stage: 0
   lock_wrist: false
-  gripper_rate: 0.02
 
 eval:
   episodes: 10

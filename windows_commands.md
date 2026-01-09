@@ -55,6 +55,54 @@ Train the petri lid (free dish base) task with curriculum stage 3:
 $env:PYTHONPATH="."; uv run python train_lift_petri_lid_free_dish.py --config configs/lift_petri_lid_free_dish_s3.yaml
 ```
 
+### Progressive Curriculum (Petri Lid)
+
+Each stage number matches curriculum_stage for clarity:
+
+**Visualize curriculum stages (sanity check)**
+```powershell
+$env:PYTHONPATH="."; uv run python visualize_curriculum.py --config configs/grasp_stage1_close.yaml --episodes 3
+```
+This saves videos to `curriculum_videos/` showing the initial state and behavior for each stage.
+
+**Stage 1: Hold grasped lid (150k steps) - Easiest**
+```powershell
+$env:PYTHONPATH="."; uv run python train_lift_petri_lid_free_dish.py --config configs/grasp_stage1_close.yaml
+```
+- curriculum_stage=1: Lid already in gripper, lifted
+- Focus: Maintaining grasp at target height
+- Success: Hold at 8cm
+
+**Stage 2: Lift grasped lid (250k steps)**
+```powershell
+$env:PYTHONPATH="."; uv run python train_lift_petri_lid_free_dish.py `
+  --config configs/grasp_stage2_small_lift.yaml `
+  --pretrained runs/grasp_stage1_close/<timestamp>/model_150000.zip
+```
+- curriculum_stage=2: Lid in gripper on table
+- Focus: Lifting while maintaining grasp
+- Success: Lift to 8cm and hold
+
+**Stage 3: Grasp and lift (400k steps)**
+```powershell
+$env:PYTHONPATH="."; uv run python train_lift_petri_lid_free_dish.py `
+  --config configs/grasp_stage3_full_lift.yaml `
+  --pretrained runs/grasp_stage2_small_lift/<timestamp>/model_250000.zip
+```
+- curriculum_stage=3: Gripper near lid, open
+- Focus: Grasping delicate lid + lifting
+- Success: Grasp, lift to 8cm and hold
+
+**Stage 4: Reach, grasp, and lift (600k steps) - Hardest**
+```powershell
+$env:PYTHONPATH="."; uv run python train_lift_petri_lid_free_dish.py `
+  --config configs/grasp_stage4_full_task.yaml `
+  --pretrained runs/grasp_stage3_full_lift/<timestamp>/model_400000.zip
+```
+- curriculum_stage=4: Gripper far from lid
+- Focus: Reaching + descending + grasping + lifting
+- Success: Full reach and lift
+
 ### Evaluation
 
 Evaluate a trained model and generate videos:
@@ -91,20 +139,6 @@ Train an RL agent using wrist camera observations:
 ```powershell
 $env:MUJOCO_GL="egl"; uv run python src/training/train_image_rl.py `
     --config configs/drqv2_lift_s3_v19.yaml
-```
-
-Train the petri lid (free dish base) task with wrist camera observations:
-
-```powershell
-$env:MUJOCO_GL="egl"; uv run python src/training/train_image_rl_petri_lid_free_dish.py `
-    --config configs/drqv2_lift_petri_lid_free_dish_v19.yaml
-```
-
-Train the petri lid (free dish base) task with curriculum stage 3:
-
-```powershell
-$env:MUJOCO_GL="egl"; uv run python src/training/train_image_rl_petri_lid_free_dish.py `
-    --config configs/drqv2_lift_petri_lid_free_dish_s3_v19.yaml
 ```
 
 ### Evaluate Checkpoint

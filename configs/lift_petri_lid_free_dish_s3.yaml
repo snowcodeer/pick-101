@@ -11,26 +11,27 @@ training:
 
 sac:
   learning_rate: 3.0e-4
-  buffer_size: 100000
-  learning_starts: 1000
+  buffer_size: 200000  # Increased for better sample diversity
+  learning_starts: 5000  # More initial exploration
   batch_size: 256
   tau: 0.005
   gamma: 0.99
   train_freq: 1
   gradient_steps: 1
+  ent_coef: 'auto_0.1'  # Auto-tune entropy with target 0.1
+  target_entropy: 'auto'
 
 env:
   normalize_obs: true
   normalize_reward: true
-  max_episode_steps: 300
-  action_scale: 0.02
-  lift_height: 0.08
-  hold_steps: 150
+  max_episode_steps: 100  # Shorter - focus on grasping only
+  action_scale: 0.006  # Reduced from 0.02 - more delicate movements
+  lift_height: 0.03  # Lower initial target
+  hold_steps: 10  # Reduced from 150 - easier success condition
   reward_type: "dense"
-  reward_version: "v19"
+  reward_version: "v20"
   curriculum_stage: 3
   lock_wrist: true
-  gripper_rate: 0.02
 
 eval:
   episodes: 10
