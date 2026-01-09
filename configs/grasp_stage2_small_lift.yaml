@@ -32,7 +32,7 @@ env:
   lift_height: 0.08  # Full lift height
   hold_steps: 15  # Hold at target height
   reward_type: "dense"
-  reward_version: "v20"
+  reward_version: "v22"
   curriculum_stage: 2  # Stage 2: Lid in gripper on table
   lock_wrist: true
 

@@ -29,8 +29,6 @@ def main():
                         help="Lock wrist joints (overrides config)")
     parser.add_argument("--action-scale", type=float, default=None,
                         help="Action scale (overrides config)")
-    parser.add_argument("--gripper-rate", type=float, default=None,
-                        help="Gripper rate limit (overrides config)")
     args = parser.parse_args()
 
     if args.run is None and args.model is None:
@@ -87,7 +85,6 @@ def main():
     curriculum_stage = args.curriculum_stage if args.curriculum_stage is not None else env_cfg.get("curriculum_stage", 0)
     lock_wrist = args.lock_wrist or env_cfg.get("lock_wrist", False)
     action_scale = args.action_scale if args.action_scale is not None else env_cfg.get("action_scale", 0.02)
-    gripper_rate = args.gripper_rate if args.gripper_rate is not None else env_cfg.get("gripper_rate", 0.02)
     max_episode_steps = env_cfg.get("max_episode_steps", 200)
     lift_height = env_cfg.get("lift_height", 0.08)
     hold_steps = env_cfg.get("hold_steps", 10)
@@ -102,7 +99,6 @@ def main():
         lift_height=lift_height,
         hold_steps=hold_steps,
         reward_version=reward_version,
-        gripper_rate=gripper_rate,
     )
     vec_env = DummyVecEnv([lambda: env])
 

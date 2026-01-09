@@ -6,7 +6,7 @@ experiment:
   base_dir: "runs"
 
 training:
-  timesteps: 400000
+  timesteps: 500000
   eval_freq: 10000
   save_freq: 50000
   seed: 42
@@ -32,7 +32,7 @@ env:
   lift_height: 0.08  # Full target height
   hold_steps: 15
   reward_type: "dense"
-  reward_version: "v20"
+  reward_version: "v23"
   curriculum_stage: 3  # Stage 3: Gripper near lid, open
   lock_wrist: true
 

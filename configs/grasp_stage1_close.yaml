@@ -6,7 +6,7 @@ experiment:
   base_dir: "runs"
 
 training:
-  timesteps: 150000  # Focused on grasping only
+  timesteps: 100000  # Focused on grasping only
   eval_freq: 5000
   save_freq: 25000
   seed: 42
@@ -29,9 +29,9 @@ env:
   max_episode_steps: 100  # Short episodes - just hold
   action_scale: 0.006  # Very gentle for delicate lid
   lift_height: 0.08  # Target lift height
-  hold_steps: 10  # Hold at target height
+  hold_steps: 50  # Hold at target height
   reward_type: "dense"
-  reward_version: "v20"
+  reward_version: "v22"
   curriculum_stage: 1  # Stage 1: Lid already in gripper, lifted
   lock_wrist: true  # Lock wrist for stability
 
