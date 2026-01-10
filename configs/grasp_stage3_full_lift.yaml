@@ -21,8 +21,6 @@ sac:
   gamma: 0.99
   train_freq: 1
   gradient_steps: 1
-  ent_coef: 'auto_0.1'
-  target_entropy: 'auto'
 
 env:
   normalize_obs: true
@@ -32,7 +30,7 @@ env:
   lift_height: 0.08  # Full target height
   hold_steps: 15
   reward_type: "dense"
-  reward_version: "v23"
+  reward_version: "v26"
   curriculum_stage: 3  # Stage 3: Gripper near lid, open
   lock_wrist: true
 

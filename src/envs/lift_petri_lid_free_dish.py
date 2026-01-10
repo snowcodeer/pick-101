@@ -67,6 +67,9 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         self._prev_action = np.zeros(4)
         self._open_gripper_count = 0
         self._dish_start_pos = None
+        self._top_contact_count = 0  # Track consecutive steps with top contact but no grasp
+        self._has_rewarded_skirt_contact = False  # One-time skirt contact bonus
+        self._has_rewarded_closing = False  # One-time closing after contact bonus
 
         # Load model
         scene_path = Path(__file__).parent.parent.parent / "models/so101/lift_petri_lid_free_dish.xml"
@@ -216,6 +219,15 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         dish_stable = dish_disp < 0.01  # Dish should stay within 1cm of start position
 
         has_gripper_contact, has_jaw_contact = self._check_lid_contacts()
+        top_contact = False
+        skirt_contact = False
+        for i in range(self.data.ncon):
+            g1 = self.data.contact[i].geom1
+            g2 = self.data.contact[i].geom2
+            if g1 == self._lid_top_geom_id or g2 == self._lid_top_geom_id:
+                top_contact = True
+            if g1 == self._lid_skirt_geom_id or g2 == self._lid_skirt_geom_id:
+                skirt_contact = True
 
         return {
             "gripper_to_lid": gripper_to_lid,
@@ -228,6 +240,8 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
             "dish_stable": dish_stable,
             "has_gripper_contact": has_gripper_contact,
             "has_jaw_contact": has_jaw_contact,
+            "has_top_contact": top_contact,
+            "has_skirt_contact": skirt_contact,
             "is_grasping": is_grasping,
             "is_lifted": is_lifted,
             "hold_count": self._hold_count,
@@ -289,6 +303,9 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         self._grasp_streak = 0
         self._prev_action = np.zeros(4)
         self._open_gripper_count = 0
+        self._top_contact_count = 0
+        self._has_rewarded_skirt_contact = False
+        self._has_rewarded_closing = False
         self._dish_start_pos = self.data.qpos[self._dish_qpos_addr : self._dish_qpos_addr + 3].copy()
 
         return self._get_obs(), self._get_info()
@@ -584,6 +601,13 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         else:
             self._grasp_streak = 0
         info["grasp_streak"] = self._grasp_streak
+
+        # Update top contact count (consecutive steps with top contact but no grasp)
+        if info["has_top_contact"] and not info["is_grasping"]:
+            self._top_contact_count += 1
+        else:
+            self._top_contact_count = 0
+        info["top_contact_count"] = self._top_contact_count
 
         # Check success
         is_success = self._hold_count >= self.hold_steps
@@ -979,7 +1003,8 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         # Dish drift penalty (weaker to avoid dominating)
         if self._dish_start_pos is not None:
             dish_disp = np.linalg.norm(dish_pos - self._dish_start_pos)
-            reward -= dish_disp * 2.0
+            dish_penalty = min(dish_disp * 2.0, 1.0)  # Cap at -1.0 per step
+            reward -= dish_penalty
 
         # Action rate penalty during hold
         if action is not None and lid_z > self.lift_height and hold_count > 0:
@@ -1089,7 +1114,8 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
         # Penalize pushing the dish base
         if self._dish_start_pos is not None:
             dish_disp = np.linalg.norm(dish_pos - self._dish_start_pos)
-            reward -= dish_disp * 2.0
+            dish_penalty = min(dish_disp * 2.0, 1.0)  # Cap at -1.0 per step
+            reward -= dish_penalty
 
         # Action rate penalty during hold phase
         if action is not None and lid_z > self.lift_height and hold_count > 0:
@@ -1102,6 +1128,325 @@ class LiftPetriLidFreeDishCartesianEnv(gym.Env):
 
         return reward
 
+    def _reward_v24(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
+        """V24: Penalize one-sided contact without closing or grasping."""
+        reward = 0.0
+        lid_pos = info["lid_pos"]
+        lid_z = info["lid_z"]
+        gripper_to_lid = info["gripper_to_lid"]
+        gripper_state = info["gripper_state"]
+        is_grasping = info["is_grasping"]
+        hold_count = info["hold_count"]
+        dish_pos = info["dish_pos"]
+        grasp_streak = info.get("grasp_streak", 0)
+        top_contact_streak = self._top_contact_streak
+        top_contact_streak = self._top_contact_streak
+        top_contact_streak = self._top_contact_streak
+
+        gripper_reach = 1.0 - np.tanh(10.0 * gripper_to_lid)
+        reward += gripper_reach * 0.5
+
+        rim_z_offset = 0.00175
+        target_grasp_z = lid_z + rim_z_offset
+        gripper_z = info["gripper_pos"][2]
+        z_error = abs(gripper_z - target_grasp_z)
+        if gripper_reach > 0.7:
+            height_alignment = 1.0 - np.tanh(50.0 * z_error)
+            reward += height_alignment * 0.6
+
+        top_contact = False
+        skirt_contact = False
+        for i in range(self.data.ncon):
+            g1 = self.data.contact[i].geom1
+            g2 = self.data.contact[i].geom2
+            if g1 == self._lid_top_geom_id or g2 == self._lid_top_geom_id:
+                top_contact = True
+            if g1 == self._lid_skirt_geom_id or g2 == self._lid_skirt_geom_id:
+                skirt_contact = True
+
+        if gripper_reach > 0.7 and z_error < 0.01:
+            if skirt_contact:
+                reward += 2.0
+            if top_contact and not skirt_contact:
+                reward -= 2.0
+
+        # Penalize lingering single-sided contact without grasping
+        if (top_contact ^ skirt_contact) and not is_grasping:
+            reward -= 1.5
+
+        # Penalize closing without contact (prevents "close and wait" hacks)
+        if action is not None and action[3] < -0.2 and not skirt_contact and not top_contact and gripper_reach > 0.7:
+            reward -= 1.0
+
+        # Penalize staying high without grasping
+        if not is_grasping and gripper_z > lid_z + 0.05:
+            reward -= 0.5
+
+        # Penalize repeated light contact without grasping
+        if (top_contact or skirt_contact) and not is_grasping:
+            reward -= 0.5
+
+        # Push-down penalty
+        if lid_z < 0.01:
+            reward -= (0.01 - lid_z) * 50.0
+
+        # Drop penalty
+        if was_grasping and not is_grasping:
+            reward -= 2.0
+
+        # Grasp bonus + gentle grasp target
+        if is_grasping:
+            reward += 6.0
+            reward += 0.1 * min(grasp_streak, 20)
+            gentle_target = -0.30
+            gentle_band = 0.10
+            gentle_delta = abs(gripper_state - gentle_target)
+            if gentle_delta <= gentle_band:
+                reward += (1.0 - gentle_delta / gentle_band) * 0.8
+            else:
+                reward -= (gentle_delta - gentle_band) * 0.6
+
+            lift_progress = max(0, lid_z - 0.0155) / (self.lift_height - 0.0155)
+            reward += lift_progress * 6.0
+            if lid_z > 0.02:
+                reward += 1.0
+            if lid_z > 0.04:
+                threshold_progress = min(1.0, (lid_z - 0.04) / (self.lift_height - 0.04))
+                reward += threshold_progress * 3.0
+
+        if lid_z > self.lift_height:
+            reward += 2.0
+            reward += 0.75 * hold_count
+
+        if self._dish_start_pos is not None:
+            dish_disp = np.linalg.norm(dish_pos - self._dish_start_pos)
+            reward -= dish_disp * 2.0
+
+        if action is not None and lid_z > self.lift_height and hold_count > 0:
+            action_delta = action - self._prev_action
+            reward -= 0.02 * np.sum(action_delta**2)
+
+        if info["is_success"]:
+            reward += 30.0
+
+        return reward
+
+    def _reward_v25(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
+        """V25: Warm-up one-sided contact, decay reach/align, penalize prolonged top contact."""
+        reward = 0.0
+        lid_pos = info["lid_pos"]
+        lid_z = info["lid_z"]
+        gripper_to_lid = info["gripper_to_lid"]
+        gripper_state = info["gripper_state"]
+        is_grasping = info["is_grasping"]
+        hold_count = info["hold_count"]
+        dish_pos = info["dish_pos"]
+        grasp_streak = info.get("grasp_streak", 0)
+        top_contact_count = info.get("top_contact_count", 0)
+
+        gripper_reach = 1.0 - np.tanh(10.0 * gripper_to_lid)
+        reach_scale = 0.5 if self._step_count < 100 else 0.2
+        reward += gripper_reach * reach_scale
+
+        rim_z_offset = 0.00175
+        target_grasp_z = lid_z + rim_z_offset
+        gripper_z = info["gripper_pos"][2]
+        z_error = abs(gripper_z - target_grasp_z)
+        if gripper_reach > 0.7:
+            height_alignment = 1.0 - np.tanh(50.0 * z_error)
+            align_scale = 0.6 if self._step_count < 100 else 0.3
+            reward += height_alignment * align_scale
+
+        top_contact = False
+        skirt_contact = False
+        for i in range(self.data.ncon):
+            g1 = self.data.contact[i].geom1
+            g2 = self.data.contact[i].geom2
+            if g1 == self._lid_top_geom_id or g2 == self._lid_top_geom_id:
+                top_contact = True
+            if g1 == self._lid_skirt_geom_id or g2 == self._lid_skirt_geom_id:
+                skirt_contact = True
+
+        # Option A: Simplified contact penalties
+
+        # Reward skirt contact when positioned correctly (good grasp location)
+        if gripper_reach > 0.7 and z_error < 0.01 and skirt_contact:
+            reward += 2.0
+
+        # Immediate penalty for top-only contact when positioned (wrong grasp location)
+        if gripper_reach > 0.7 and z_error < 0.01 and top_contact and not skirt_contact:
+            reward -= 2.0
+
+        # Escalating penalty for prolonged top contact (arm gets stuck)
+        if top_contact_count > 10:
+            # After 10 steps of top contact without grasping, escalate penalty
+            stuck_penalty = min((top_contact_count - 10) * 0.1, 3.0)  # Cap at -3.0
+            reward -= stuck_penalty
+
+        # Penalize closing without contact (prevents "close and wait" hacks)
+        if action is not None and action[3] < -0.2 and not skirt_contact and not top_contact and gripper_reach > 0.7:
+            reward -= 1.0
+
+        # Penalize pinch-lift without grasping lid
+        if not is_grasping and gripper_z > lid_z + 0.05 and not top_contact and not skirt_contact:
+            reward -= 1.0
+
+        # Push-down penalty
+        if lid_z < 0.01:
+            reward -= (0.01 - lid_z) * 50.0
+
+        # Drop penalty
+        if was_grasping and not is_grasping:
+            reward -= 2.0
+
+        if is_grasping:
+            reward += 6.0
+            reward += 0.1 * min(grasp_streak, 20)
+            gentle_target = -0.30
+            gentle_band = 0.10
+            gentle_delta = abs(gripper_state - gentle_target)
+            if gentle_delta <= gentle_band:
+                reward += (1.0 - gentle_delta / gentle_band) * 0.8
+            else:
+                reward -= (gentle_delta - gentle_band) * 0.6
+
+            lift_progress = max(0, lid_z - 0.0155) / (self.lift_height - 0.0155)
+            reward += lift_progress * 6.0
+            if lid_z > 0.02:
+                reward += 1.0
+            if lid_z > 0.04:
+                threshold_progress = min(1.0, (lid_z - 0.04) / (self.lift_height - 0.04))
+                reward += threshold_progress * 3.0
+
+        if lid_z > self.lift_height:
+            reward += 2.0
+            reward += 0.75 * hold_count
+
+        if self._dish_start_pos is not None:
+            dish_disp = np.linalg.norm(dish_pos - self._dish_start_pos)
+            if dish_disp > 0.01:  # 1cm leeway before penalty starts
+                dish_penalty = min((dish_disp - 0.01) * 2.0, 1.0)  # Cap at -1.0 per step
+                reward -= dish_penalty
+
+        if action is not None and lid_z > self.lift_height and hold_count > 0:
+            action_delta = action - self._prev_action
+            reward -= 0.02 * np.sum(action_delta**2)
+
+        if info["is_success"]:
+            reward += 30.0
+
+        return reward
+
+    def _reward_v26(self, info: dict[str, Any], was_grasping: bool = False, action: np.ndarray | None = None) -> float:
+        """V26: One-time bonuses for contact/closing, increased grasp reward."""
+        reward = 0.0
+        lid_pos = info["lid_pos"]
+        lid_z = info["lid_z"]
+        gripper_to_lid = info["gripper_to_lid"]
+        gripper_state = info["gripper_state"]
+        is_grasping = info["is_grasping"]
+        hold_count = info["hold_count"]
+        dish_pos = info["dish_pos"]
+        grasp_streak = info.get("grasp_streak", 0)
+        top_contact_count = info.get("top_contact_count", 0)
+
+        gripper_reach = 1.0 - np.tanh(10.0 * gripper_to_lid)
+        reach_scale = 0.5 if self._step_count < 100 else 0.2
+        reward += gripper_reach * reach_scale
+
+        rim_z_offset = 0.00175
+        target_grasp_z = lid_z + rim_z_offset
+        gripper_z = info["gripper_pos"][2]
+        z_error = abs(gripper_z - target_grasp_z)
+        if gripper_reach > 0.7:
+            height_alignment = 1.0 - np.tanh(50.0 * z_error)
+            align_scale = 0.6 if self._step_count < 100 else 0.3
+            reward += height_alignment * align_scale
+
+        top_contact = False
+        skirt_contact = False
+        for i in range(self.data.ncon):
+            g1 = self.data.contact[i].geom1
+            g2 = self.data.contact[i].geom2
+            if g1 == self._lid_top_geom_id or g2 == self._lid_top_geom_id:
+                top_contact = True
+            if g1 == self._lid_skirt_geom_id or g2 == self._lid_skirt_geom_id:
+                skirt_contact = True
+
+        # One-time bonus for first skirt contact when positioned correctly
+        if gripper_reach > 0.7 and z_error < 0.01 and skirt_contact and not self._has_rewarded_skirt_contact:
+            reward += 5.0  # One-time bonus (was continuous 2.0/step)
+            self._has_rewarded_skirt_contact = True
+
+        # One-time bonus for closing after making skirt contact
+        if skirt_contact and action is not None and not self._has_rewarded_closing:
+            closing_action = -action[3]  # Negative gripper action = closing
+            if closing_action > 0.5:  # Closing significantly (threshold to avoid tiny actions)
+                reward += 8.0  # One-time bonus for decisive closing
+                self._has_rewarded_closing = True
+
+        # Immediate penalty for top-only contact when positioned
+        if gripper_reach > 0.7 and z_error < 0.01 and top_contact and not skirt_contact:
+            reward -= 2.0
+
+        # Escalating penalty for prolonged top contact (arm gets stuck)
+        if top_contact_count > 10:
+            stuck_penalty = min((top_contact_count - 10) * 0.1, 3.0)
+            reward -= stuck_penalty
+
+        # Penalize closing without contact (prevents "close and wait" hacks)
+        if action is not None and action[3] < -0.2 and not skirt_contact and not top_contact and gripper_reach > 0.7:
+            reward -= 1.0
+
+        # Penalize pinch-lift without grasping lid
+        if not is_grasping and gripper_z > lid_z + 0.05 and not top_contact and not skirt_contact:
+            reward -= 1.0
+
+        # Push-down penalty
+        if lid_z < 0.01:
+            reward -= (0.01 - lid_z) * 50.0
+
+        # Drop penalty
+        if was_grasping and not is_grasping:
+            reward -= 2.0
+
+        if is_grasping:
+            reward += 15.0  # Increased from 6.0 - make grasping clearly better than contact farming
+            reward += 0.1 * min(grasp_streak, 20)
+            gentle_target = -0.30
+            gentle_band = 0.10
+            gentle_delta = abs(gripper_state - gentle_target)
+            if gentle_delta <= gentle_band:
+                reward += (1.0 - gentle_delta / gentle_band) * 0.8
+            else:
+                reward -= (gentle_delta - gentle_band) * 0.6
+
+            lift_progress = max(0, lid_z - 0.0155) / (self.lift_height - 0.0155)
+            reward += lift_progress * 6.0
+            if lid_z > 0.02:
+                reward += 1.0
+            if lid_z > 0.04:
+                threshold_progress = min(1.0, (lid_z - 0.04) / (self.lift_height - 0.04))
+                reward += threshold_progress * 3.0
+
+        if lid_z > self.lift_height:
+            reward += 2.0
+            reward += 0.75 * hold_count
+
+        if self._dish_start_pos is not None:
+            dish_disp = np.linalg.norm(dish_pos - self._dish_start_pos)
+            if dish_disp > 0.01:  # 1cm leeway
+                dish_penalty = min((dish_disp - 0.01) * 2.0, 1.0)
+                reward -= dish_penalty
+
+        if action is not None and lid_z > self.lift_height and hold_count > 0:
+            action_delta = action - self._prev_action
+            reward -= 0.02 * np.sum(action_delta**2)
+
+        if info["is_success"]:
+            reward += 30.0
+
+        return reward
 
     def render(self, camera: str = "closeup") -> np.ndarray | None:
         if self.render_mode == "rgb_array":

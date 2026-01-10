@@ -21,8 +21,6 @@ sac:
   gamma: 0.99
   train_freq: 1
   gradient_steps: 1
-  ent_coef: 'auto_0.1'
-  target_entropy: 'auto'
 
 env:
   normalize_obs: true
