@@ -1,8 +1,8 @@
-# Stage 2: Learn to lift grasped lid
-# Lid in gripper on table - need to lift
-# Focus: Lifting while maintaining grasp
+# Stage 2: Learn to close and grasp the lid
+# Gripper starts at grasp height; only needs to close
+# Focus: Achieve and hold a clean grasp (no lift requirement)
 experiment:
-  name: "grasp_stage2_small_lift"
+  name: "grasp_stage2_close"
   base_dir: "runs"
 
 training:
@@ -25,13 +25,13 @@ sac:
 env:
   normalize_obs: true
   normalize_reward: true
-  max_episode_steps: 150  # Time to lift
+  max_episode_steps: 120  # Shorter since no lift required
   action_scale: 0.008  # Gentle movements
-  lift_height: 0.08  # Full lift height
-  hold_steps: 15  # Hold at target height
+  lift_height: 0.0155  # At-rest lid height counts as "lifted"
+  hold_steps: 30  # Hold grasp
   reward_type: "dense"
-  reward_version: "v22"
-  curriculum_stage: 2  # Stage 2: Lid in gripper on table
+  reward_version: "v33"
+  curriculum_stage: 2  # Stage 2: Gripper at grasp height, open
   lock_wrist: true
 
 eval:

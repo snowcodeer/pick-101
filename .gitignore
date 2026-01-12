@@ -1,5 +1,13 @@
 CLAUDE.md
 .claude
+CURRICULUM_TRAINING_GUIDE.md
+GRASP_CURRICULUM_GUIDE.md
+PLATEAU_DEBUGGING_GUIDE.md
+blog_videos/
+MUJOCO_LOG.TXT
+notes.md
+notestoself.md
+
 .venv*
 wait_and_train.sh
 **/*.mp4

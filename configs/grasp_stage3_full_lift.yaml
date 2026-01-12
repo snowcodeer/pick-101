@@ -10,8 +10,7 @@ training:
   eval_freq: 10000
   save_freq: 50000
   seed: 42
-  pretrained: null  # Set to stage2 model path
-
+  pretrained: null
 sac:
   learning_rate: 3.0e-4
   buffer_size: 400000
@@ -30,7 +29,7 @@ env:
   lift_height: 0.08  # Full target height
   hold_steps: 15
   reward_type: "dense"
-  reward_version: "v26"
+  reward_version: "v33"
   curriculum_stage: 3  # Stage 3: Gripper near lid, open
   lock_wrist: true
 

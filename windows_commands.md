@@ -43,18 +43,6 @@ Train an RL agent using low-dimensional state observations:
 $env:PYTHONPATH="."; uv run python train_lift.py --config configs/curriculum_stage3.yaml
 ```
 
-Train the petri lid (free dish base) task:
-
-```powershell
-$env:PYTHONPATH="."; uv run python train_lift_petri_lid_free_dish.py --config configs/lift_petri_lid_free_dish_500k.yaml
-```
-
-Train the petri lid (free dish base) task with curriculum stage 3:
-
-```powershell
-$env:PYTHONPATH="."; uv run python train_lift_petri_lid_free_dish.py --config configs/lift_petri_lid_free_dish_s3.yaml
-```
-
 ### Progressive Curriculum (Petri Lid)
 
 Each stage number matches curriculum_stage for clarity:
@@ -73,21 +61,21 @@ $env:PYTHONPATH="."; uv run python train_lift_petri_lid_free_dish.py --config co
 - Focus: Maintaining grasp at target height
 - Success: Hold at 8cm
 
-**Stage 2: Lift grasped lid (250k steps)**
+**Stage 2: Close and grasp lid (250k steps)**
 ```powershell
 $env:PYTHONPATH="."; uv run python train_lift_petri_lid_free_dish.py `
-  --config configs/grasp_stage2_small_lift.yaml `
+  --config configs/grasp_stage2_close.yaml `
   --pretrained runs/grasp_stage1_close/<timestamp>/model_150000.zip
 ```
-- curriculum_stage=2: Lid in gripper on table
-- Focus: Lifting while maintaining grasp
-- Success: Lift to 8cm and hold
+- curriculum_stage=2: Gripper at grasp height, open
+- Focus: Close to grasp and hold
+- Success: Grasp and hold at rest height
 
 **Stage 3: Grasp and lift (400k steps)**
 ```powershell
 $env:PYTHONPATH="."; uv run python train_lift_petri_lid_free_dish.py `
   --config configs/grasp_stage3_full_lift.yaml `
-  --pretrained runs/grasp_stage2_small_lift/<timestamp>/model_250000.zip
+  --pretrained runs/grasp_stage2_close/<timestamp>/model_250000.zip
 ```
 - curriculum_stage=3: Gripper near lid, open
 - Focus: Grasping delicate lid + lifting
