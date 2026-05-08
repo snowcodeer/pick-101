@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SLAS Europe 2026: Simulation-Based RL for Precision Manipulation</title>
+<style>
+/* ============================================================
+   A0 PORTRAIT : 841 mm × 1189 mm
+   SLAS Europe 2026  ·  Imperial College London
+   Editorial / academic style : image-driven, restrained accent
+   ============================================================ */
+
+@page { size: 841mm 1189mm; margin: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --ink:        #0E1B2C;
+    --ink-soft:   #1E2A3A;
+    --body:       #2A3441;
+    --muted:      #5A6677;
+    --rule:       #C8CDD5;
+    --rule-soft:  #E5E8EC;
+    --paper:      #FAF8F3;
+    --paper-warm: #F2EEE3;
+    --blue:       #003E74;   /* Imperial blue */
+    --blue-deep:  #001F3D;
+    --blue-pale:  #E8EEF5;
+    --accent:     #C8102E;   /* Imperial red */
+    --gold:       #B79A00;
+    --teal:       #0E7C7B;
+    --plum:       #6B2D5C;
+    --moss:       #2F6B3A;
+    /* Graduated blue palette — light to dark across §1-§7 (high-contrast steps) */
+    --shade-1:    #4A9CE0;
+    --shade-2:    #2D7FC7;
+    --shade-3:    #1965AB;
+    --shade-4:    #0B4F8E;
+    --shade-5:    #053C72;
+    --shade-6:    #022B57;
+    --shade-7:    #001838;
+}
+
+html, body {
+    width: 841mm; height: 1189mm;
+    background: var(--paper);
+    color: var(--body);
+    font-family: 'Charter', 'Iowan Old Style', 'Source Serif Pro', Georgia, 'Times New Roman', serif;
+    font-feature-settings: "kern" 1, "liga" 1, "onum" 1;
+    -webkit-font-smoothing: antialiased;
+}
+
+.sans { font-family: 'Inter', 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif; font-feature-settings: "kern" 1, "ss01" 1, "tnum" 1; }
+
+.poster {
+    width: 841mm; height: 1189mm;
+    padding: 8mm 14mm 6mm 14mm;
+    display: flex; flex-direction: column;
+}
+
+/* ============================================================
+   KICKER BAR
+   ============================================================ */
+.kicker-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: 'Inter', sans-serif;
+    font-size: 15pt; font-weight: 600;
+    letter-spacing: 0.28em; text-transform: uppercase;
+    color: var(--blue);
+    margin-bottom: 4mm;
+    border-top: 0.6mm solid var(--ink);
+    border-bottom: 0.3mm solid var(--rule);
+    padding: 2.5mm 0;
+}
+.kicker-row .left  { color: var(--blue); }
+.kicker-row .mid   { color: var(--muted); letter-spacing: 0.18em; }
+.kicker-row .right { display: flex; align-items: center; justify-content: flex-end; }
+.kicker-logo {
+    height: 11mm;
+    width: auto;
+    display: block;
+}
+
+/* ============================================================
+   MASTHEAD
+   ============================================================ */
+.masthead {
+    display: grid;
+    grid-template-columns: 1fr 150mm;
+    gap: 8mm;
+    padding-bottom: 2mm;
+    border-bottom: 0.6mm solid var(--ink);
+    margin-bottom: 3mm;
+}
+
+.title {
+    font-family: 'Charter', 'Iowan Old Style', Georgia, serif;
+    font-size: 64pt;
+    font-weight: 700;
+    line-height: 1.02;
+    letter-spacing: -0.012em;
+    color: var(--ink);
+    margin-bottom: 4mm;
+    text-wrap: balance;
+}
+.title em { font-style: italic; color: var(--blue); }
+
+.byline {
+    display: flex; align-items: baseline; gap: 6mm;
+    border-top: 0.3mm solid var(--rule);
+    padding-top: 3mm;
+}
+.byline .author {
+    font-size: 28pt; font-weight: 700; color: var(--ink);
+    letter-spacing: -0.005em;
+}
+.byline .sep { color: var(--rule); font-size: 26pt; }
+.byline .affil {
+    font-size: 17pt; font-weight: 400; color: var(--muted);
+    line-height: 1.3;
+}
+.byline .affil strong { color: var(--ink-soft); font-weight: 600; }
+
+.masthead-img {
+    background: var(--paper-warm);
+    border-radius: 2mm;
+    overflow: hidden;
+    position: relative;
+    align-self: stretch;
+    height: 100%;
+    min-height: 55mm;
+    box-shadow: 0 1mm 4mm rgba(14, 27, 44, 0.08);
+}
+.masthead-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.masthead-img .badge {
+    position: absolute; top: 4mm; left: 4mm;
+    background: var(--ink); color: var(--paper);
+    font-family: 'Inter', sans-serif;
+    font-size: 11pt; font-weight: 700;
+    padding: 2mm 4mm; letter-spacing: 0.15em; text-transform: uppercase;
+    border-radius: 1mm;
+}
+.masthead-img .legend {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+    color: white;
+    font-family: 'Inter', sans-serif;
+    font-size: 11pt; font-style: italic;
+    padding: 8mm 4mm 3mm 4mm;
+}
+
+/* ============================================================
+   ABSTRACT STRIP
+   ============================================================ */
+.abstract-panel { margin-bottom: 3mm; }
+.abstract-panel .section-body { padding: 1mm 6mm 2mm 6mm; }
+.abstract-cols {
+    column-count: 3;
+    column-gap: 9mm;
+    column-rule: 0.2mm solid var(--rule);
+    text-align: justify;
+    hyphens: auto;
+    -webkit-hyphens: auto;
+}
+.abstract-cols p {
+    font-size: 10.5pt;
+    line-height: 1.34;
+    margin-bottom: 2mm;
+    color: var(--body);
+    text-wrap: pretty;
+    break-inside: avoid-column;
+}
+.abstract-cols p:last-child { margin-bottom: 0; }
+.abstract-cols p strong { color: var(--blue); font-weight: 700; }
+.abstract-cols p em { font-style: italic; color: var(--ink); }
+.abstract-cols p:first-child::first-letter {
+    font-family: 'Charter', Georgia, serif;
+    font-size: 26pt;
+    font-weight: 700;
+    color: var(--blue);
+    float: left;
+    line-height: 0.9;
+    padding: 1mm 2mm 0 0;
+}
+
+
+/* ============================================================
+   THREE-COLUMN BODY
+   ============================================================ */
+.columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 5mm;
+    margin-bottom: 3mm;
+    align-items: stretch;
+}
+
+.column { display: flex; flex-direction: column; gap: 3mm; }
+.column .section { flex: 1; display: flex; flex-direction: column; }
+.bottom .section { padding: 0 0 3mm 0; }
+
+.section {
+    background: white;
+    border: 0.3mm solid var(--rule);
+    padding: 0 0 2mm 0;
+    box-shadow: 0 0.4mm 1.2mm rgba(14, 27, 44, 0.04);
+    overflow: visible;
+    position: relative;
+}
+
+.section .pushdown { margin-top: auto; }
+
+.section-body {
+    padding: 3mm 5mm 0 5mm;
+    flex: 1;
+    display: flex; flex-direction: column;
+}
+
+/* Numbered colored header band : circle on left, rounded right end */
+.sec-head {
+    background: var(--blue);
+    color: white;
+    margin: 3mm 5mm 2mm 10mm;
+    padding: 2mm 7mm 2mm 16mm;
+    border-radius: 0 6mm 6mm 0;
+    position: relative;
+    display: flex; align-items: center;
+    box-shadow: 0 0.5mm 1.6mm rgba(14, 27, 44, 0.12);
+    min-height: 16mm;
+}
+.sec-head .num {
+    position: absolute;
+    left: -8mm;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 19mm; height: 19mm;
+    border-radius: 50%;
+    background: white;
+    color: var(--blue);
+    border: 1.1mm solid var(--blue);
+    font-family: 'Charter', 'Iowan Old Style', Georgia, serif;
+    font-size: 28pt;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0.6mm 1.6mm rgba(14, 27, 44, 0.22);
+}
+.sec-head .title {
+    font-family: 'Charter', 'Iowan Old Style', Georgia, serif;
+    font-size: 26pt;
+    font-weight: 700;
+    color: white;
+    line-height: 1.05;
+    letter-spacing: -0.005em;
+    flex: 1;
+}
+.sec-head .title em { font-style: italic; color: #FFD166; }
+
+/* Per-section accent overrides */
+.section.accent-s1 .sec-head { background: var(--shade-1); }
+.section.accent-s1 .sec-head .num { color: var(--shade-1); border-color: var(--shade-1); }
+
+.section.accent-s2 .sec-head { background: var(--shade-2); }
+.section.accent-s2 .sec-head .num { color: var(--shade-2); border-color: var(--shade-2); }
+
+.section.accent-s3 .sec-head { background: var(--shade-3); }
+.section.accent-s3 .sec-head .num { color: var(--shade-3); border-color: var(--shade-3); }
+
+.section.accent-s4 .sec-head { background: var(--shade-4); }
+.section.accent-s4 .sec-head .num { color: var(--shade-4); border-color: var(--shade-4); }
+
+.section.accent-s5 .sec-head { background: var(--shade-5); }
+.section.accent-s5 .sec-head .num { color: var(--shade-5); border-color: var(--shade-5); }
+
+.section.accent-s6 .sec-head { background: var(--shade-6); }
+.section.accent-s6 .sec-head .num { color: var(--shade-6); border-color: var(--shade-6); }
+
+.section.accent-s7 .sec-head { background: var(--shade-7); }
+.section.accent-s7 .sec-head .num { color: var(--shade-7); border-color: var(--shade-7); }
+
+.section p {
+    font-size: 14pt;
+    line-height: 1.4;
+    margin-bottom: 2.5mm;
+    color: var(--body);
+    text-wrap: pretty;
+}
+.section p strong { color: var(--blue); font-weight: 700; }
+
+.section h3 {
+    font-family: 'Inter', sans-serif;
+    font-size: 11pt;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin: 3mm 0 1.5mm 0;
+}
+.section h3:first-child { margin-top: 0; }
+
+.section h3::before {
+    content: ""; display: inline-block;
+    width: 5mm; height: 0.8mm;
+    background: var(--blue);
+    vertical-align: middle;
+    margin-right: 2.5mm;
+    transform: translateY(-1mm);
+}
+
+.section ul { list-style: none; padding: 0; margin: 0 0 3mm 0; }
+.section ul li {
+    font-size: 13pt; line-height: 1.34;
+    padding: 1.5mm 0 1.5mm 6mm;
+    border-bottom: 0.2mm solid var(--rule-soft);
+    position: relative;
+    color: var(--body);
+}
+.section ul li:last-child { border-bottom: none; }
+.section ul li::before {
+    content: ""; position: absolute; left: 0; top: 5mm;
+    width: 3.5mm; height: 0.6mm; background: var(--blue);
+}
+.section ul li strong { color: var(--ink); font-weight: 700; }
+
+/* SAC algorithm summary box */
+.sac-algo {
+    background: var(--paper-warm);
+    border-left: 1mm solid var(--shade-3);
+    padding: 3mm 4mm 3mm 5mm;
+    margin: 2mm 0 3mm 0;
+}
+.sac-algo-head {
+    font-family: 'Inter', sans-serif;
+    font-size: 9pt; font-weight: 700;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--shade-3);
+    margin-bottom: 2mm;
+}
+.sac-algo-list {
+    list-style: none; padding: 0; margin: 0;
+    counter-reset: sac;
+}
+.sac-algo-list li {
+    position: relative;
+    padding: 1mm 0 1mm 7mm;
+    font-size: 10.5pt;
+    line-height: 1.3;
+    color: var(--body);
+    counter-increment: sac;
+    border-bottom: 0.15mm solid rgba(0,0,0,0.08);
+}
+.sac-algo-list li:last-child { border-bottom: none; }
+.sac-algo-list li::before {
+    content: counter(sac);
+    position: absolute; left: 0; top: 1.6mm;
+    width: 5mm; height: 5mm;
+    border-radius: 50%;
+    background: var(--shade-3);
+    color: white;
+    font-family: 'Inter', sans-serif;
+    font-size: 8pt; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+}
+.sac-algo-list li strong { color: var(--shade-3); font-weight: 700; }
+
+/* SAC math equations box */
+.sac-math {
+    background: var(--paper-warm);
+    border-left: 1mm solid var(--shade-2);
+    padding: 3mm 4mm;
+    margin: 2mm 0 3mm 0;
+}
+.sac-math-head {
+    font-family: 'Inter', sans-serif;
+    font-size: 9pt; font-weight: 700;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--shade-2);
+    margin-bottom: 2mm;
+}
+.sac-math .eq {
+    font-family: 'Charter', 'Iowan Old Style', Georgia, serif;
+    font-style: italic;
+    font-size: 11pt;
+    color: var(--ink);
+    text-align: center;
+    margin: 1.2mm 0 0.5mm 0;
+}
+.sac-math .eq sub, .sac-math .eq sup { font-size: 8pt; font-style: normal; }
+.sac-math .eq-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 8.5pt;
+    color: var(--muted);
+    text-align: center;
+    margin-bottom: 1.5mm;
+}
+.sac-math .eq-label em { color: var(--shade-2); font-style: italic; }
+
+/* YAML config box */
+.yaml-box {
+    background: #0E1B2C;
+    border-radius: 1mm;
+    padding: 3mm 4mm;
+    margin: 2mm 0 3mm 0;
+    overflow: hidden;
+}
+.yaml-head {
+    font-family: 'SF Mono', 'Menlo', monospace;
+    font-size: 8.5pt;
+    color: #8FB8DD;
+    margin-bottom: 1.5mm;
+    border-bottom: 0.2mm solid rgba(143,184,221,0.3);
+    padding-bottom: 1mm;
+    letter-spacing: 0.05em;
+}
+.yaml-box pre {
+    font-family: 'SF Mono', 'Menlo', 'Courier New', monospace;
+    font-size: 8.5pt;
+    line-height: 1.34;
+    color: #E8EEF5;
+    margin: 0;
+    white-space: pre;
+}
+.yaml-box pre .yc { color: #FFD166; font-weight: 700; }
+
+/* Additional experiments panel */
+.extra-panel { margin-bottom: 3mm; }
+.extra-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 5mm;
+    padding: 1mm 5mm 3mm 5mm;
+}
+.extra-cell h3 {
+    font-family: 'Inter', sans-serif;
+    font-size: 10pt; font-weight: 700;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--ink);
+    margin: 0 0 1.5mm 0;
+}
+.extra-cell h3::before {
+    content: ""; display: inline-block;
+    width: 5mm; height: 0.8mm;
+    background: var(--shade-5);
+    vertical-align: middle;
+    margin-right: 2.5mm;
+    transform: translateY(-1mm);
+}
+.extra-cell p {
+    font-size: 10pt; line-height: 1.32;
+    color: var(--body);
+    margin-bottom: 1.5mm;
+}
+.extra-cell p strong { color: var(--shade-5); font-weight: 700; }
+.extra-cell .fig { margin: 1mm 0 0 0; padding: 1.5mm; }
+.extra-cell .fig img { max-height: 55mm; object-fit: contain; }
+.extra-cell .fig-caption { font-size: 8.5pt; }
+
+ul.takeaways { list-style: none; padding: 0; margin: 0 0 3mm 0; }
+ul.takeaways li {
+    font-size: 11pt; line-height: 1.32;
+    padding: 1.2mm 0 1.2mm 6mm;
+    border-bottom: 0.2mm solid var(--rule-soft);
+    position: relative;
+    color: var(--body);
+}
+ul.takeaways li:last-child { border-bottom: none; }
+ul.takeaways li::before {
+    content: "▸"; position: absolute; left: 0; top: 1.2mm;
+    color: var(--shade-6); font-size: 11pt; font-weight: 700;
+}
+.accent-s6 ul.takeaways li::before { color: var(--shade-6); }
+
+ul.principles { list-style: none; padding: 0; margin: 1mm 0 3mm 0; }
+ul.principles li {
+    font-size: 11pt; line-height: 1.34;
+    padding: 1mm 0 1mm 6mm;
+    position: relative;
+    color: var(--body);
+}
+ul.principles li::before {
+    content: "✓"; position: absolute; left: 0; top: 1mm;
+    color: var(--shade-6); font-size: 12pt; font-weight: 700;
+}
+ul.principles li strong { color: var(--ink); font-weight: 700; }
+
+/* ============================================================
+   STATS
+   ============================================================ */
+.stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 2mm;
+    margin: 3mm 0;
+}
+.stat {
+    background: var(--blue-pale);
+    border-radius: 1.5mm;
+    padding: 3mm 3mm;
+    text-align: left;
+    border-top: 0.6mm solid var(--shade-2);
+}
+.stat .num {
+    font-family: 'Charter', Georgia, serif;
+    font-size: 26pt;
+    font-weight: 700;
+    color: var(--shade-3);
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-feature-settings: "lnum" 1, "tnum" 1;
+}
+.stat .label {
+    font-family: 'Inter', sans-serif;
+    font-size: 9pt;
+    font-weight: 600;
+    color: var(--shade-5);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-top: 1.5mm;
+    line-height: 1.3;
+}
+
+/* ============================================================
+   PULL QUOTE
+   ============================================================ */
+.pullquote {
+    margin: 3mm 0;
+    padding: 3mm 3.5mm 3mm 5mm;
+    border-left: 1.2mm solid var(--accent);
+    background: var(--paper-warm);
+    font-family: 'Charter', Georgia, serif;
+    font-style: italic;
+    font-size: 13pt;
+    line-height: 1.3;
+    color: var(--ink);
+    text-wrap: balance;
+}
+.pullquote::before {
+    content: "“";
+    font-size: 36pt; color: var(--accent);
+    line-height: 0; vertical-align: -6mm;
+    margin-right: 1.5mm;
+    font-style: normal;
+}
+.pullquote .attrib {
+    display: block;
+    font-style: normal;
+    font-family: 'Inter', sans-serif;
+    font-size: 9pt;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 3mm;
+}
+
+/* Research-question box */
+.research-q {
+    background: var(--blue);
+    color: white;
+    padding: 4mm 5mm;
+    margin-top: 4mm;
+}
+.research-q .rq-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 10pt; font-weight: 700;
+    letter-spacing: 0.25em; text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 3mm;
+    padding-bottom: 2mm;
+    border-bottom: 0.3mm solid rgba(255, 255, 255, 0.25);
+}
+.research-q .rq-text {
+    font-family: 'Charter', Georgia, serif;
+    font-size: 15pt;
+    line-height: 1.32;
+    color: white;
+    text-wrap: pretty;
+}
+.research-q .rq-text em { color: #FFD166; font-style: italic; font-weight: 600; }
+
+/* ============================================================
+   FIGURES (uncropped graphs)
+   ============================================================ */
+.fig {
+    margin: 2.5mm 0;
+    background: white;
+    border: 0.3mm solid var(--rule);
+    padding: 2mm;
+}
+.fig img {
+    width: 100%; height: auto; display: block;
+    background: var(--paper-warm);
+}
+.fig-caption {
+    font-family: 'Inter', sans-serif;
+    font-size: 9pt;
+    line-height: 1.3;
+    color: var(--muted);
+    padding: 1.5mm 0.5mm 0 0.5mm;
+}
+.fig-caption strong { color: var(--blue); font-weight: 700; }
+
+/* ============================================================
+   FAILURE PANEL
+   ============================================================ */
+.failure-panel {
+    background: white;
+    border: 0.3mm solid var(--rule);
+    margin-bottom: 3mm;
+    overflow: visible;
+    position: relative;
+}
+
+.failure-panel .fp-body {
+    padding: 2mm 5mm 4mm 5mm;
+}
+
+.fp-subtitle {
+    font-family: 'Inter', sans-serif;
+    font-size: 10pt; font-weight: 600;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    color: rgba(255,255,255,0.85);
+    margin-left: 6mm;
+    padding: 1mm 4mm;
+    border-left: 0.4mm solid rgba(255,255,255,0.45);
+}
+
+.fp-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 4mm;
+}
+
+.fp-card {
+    border: 0.3mm solid var(--rule);
+    background: var(--paper);
+    display: flex; flex-direction: column;
+}
+
+.fp-img {
+    width: 100%;
+    aspect-ratio: 16 / 8;
+    object-fit: cover;
+    display: block;
+    border-bottom: 0.3mm solid var(--rule);
+}
+
+.fp-body {
+    padding: 2.5mm 3mm 3mm 3mm;
+    flex: 1;
+    display: flex; flex-direction: column;
+}
+
+.fp-letter {
+    font-family: 'Charter', Georgia, serif;
+    font-size: 20pt;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 0.5mm;
+    letter-spacing: -0.02em;
+}
+
+.fp-tag {
+    font-family: 'Inter', sans-serif;
+    font-size: 8.5pt;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 1mm;
+}
+
+.fp-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 12pt;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.2;
+    margin-bottom: 1.5mm;
+}
+
+.fp-desc {
+    font-size: 10.5pt;
+    line-height: 1.32;
+    color: var(--body);
+    margin-bottom: 2mm;
+    flex: 1;
+}
+
+.fp-fix {
+    font-family: 'Inter', sans-serif;
+    font-size: 9pt;
+    line-height: 1.3;
+    color: var(--ink);
+    border-top: 0.2mm solid var(--rule);
+    padding-top: 1.5mm;
+}
+.fp-fix strong {
+    display: block;
+    color: var(--blue);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-size: 8.5pt;
+    margin-bottom: 0.8mm;
+}
+
+/* Curves strip : uncropped */
+.fp-curves-strip {
+    margin: 4mm 0 0 0;
+}
+.fp-curves-strip .strip-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 4mm;
+}
+.fp-curves-strip .strip-cell {
+    background: white;
+    border: 0.3mm solid var(--rule);
+    padding: 4mm 2.5mm 2.5mm 2.5mm;
+    position: relative;
+    display: flex; flex-direction: column;
+}
+.fp-curves-strip .strip-cell img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    display: block;
+}
+.fp-curves-strip .strip-tag {
+    position: absolute;
+    top: 0; left: 0;
+    background: var(--accent);
+    color: white;
+    font-family: 'Inter', sans-serif;
+    font-size: 9pt; font-weight: 700;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    padding: 1.5mm 3mm;
+    z-index: 1;
+}
+.fp-curves-strip figcaption {
+    font-family: 'Inter', sans-serif;
+    font-size: 9pt;
+    line-height: 1.4;
+    color: var(--muted);
+    padding: 2.5mm 1mm 0 1mm;
+    text-wrap: pretty;
+}
+.fp-curves-strip figcaption strong { color: var(--blue); font-weight: 700; }
+
+.fp-summary {
+    margin-top: 3mm;
+    padding: 3mm 4mm;
+    background: var(--paper-warm);
+    border-left: 1mm solid var(--accent);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 5mm;
+    align-items: center;
+}
+.fp-summary .label {
+    font-family: 'Inter', sans-serif;
+    font-size: 10pt; font-weight: 700;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--accent);
+    line-height: 1.3;
+    border-right: 0.3mm solid var(--rule);
+    padding-right: 6mm;
+}
+.fp-summary .text {
+    font-family: 'Charter', Georgia, serif;
+    font-size: 12pt;
+    line-height: 1.3;
+    color: var(--ink);
+    font-style: italic;
+}
+.fp-summary .text strong {
+    font-style: normal; color: var(--blue); font-weight: 700;
+}
+
+/* ============================================================
+   BOTTOM ROW
+   ============================================================ */
+.bottom {
+    display: grid;
+    grid-template-columns: 1.05fr 1.05fr 0.6fr;
+    gap: 5mm;
+    margin-bottom: 1mm;
+    align-items: stretch;
+}
+
+.bottom .section {
+    display: flex; flex-direction: column;
+}
+
+.qr-card {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 5mm 4mm;
+    display: flex; flex-direction: column;
+    border-radius: 0;
+    position: relative;
+    overflow: hidden;
+}
+.qr-card::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 1.2mm; background: var(--blue);
+}
+.qr-kicker {
+    font-family: 'Inter', sans-serif;
+    font-size: 10pt; font-weight: 700;
+    letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--blue-pale);
+    opacity: 0.85;
+    margin-bottom: 3mm;
+}
+.qr-title {
+    font-family: 'Charter', Georgia, serif;
+    font-size: 18pt;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    color: white;
+    margin-bottom: 4mm;
+}
+.qr-title em { color: #FFD166; font-style: italic; }
+
+.qr-box {
+    background: white;
+    padding: 3mm;
+    flex: 1;
+    min-height: 70mm;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 4mm;
+}
+.qr-box svg, .qr-box img {
+    width: 100%; height: 100%; display: block;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+}
+
+.qr-foot {
+    font-family: 'Inter', sans-serif;
+    font-size: 10pt;
+    color: rgba(255, 255, 255, 0.85);
+    line-height: 1.4;
+    border-top: 0.3mm solid rgba(255, 255, 255, 0.18);
+    padding-top: 3mm;
+    margin-top: auto;
+}
+.qr-foot strong {
+    display: block;
+    color: white; font-size: 12pt; font-weight: 700;
+    margin-bottom: 1mm; letter-spacing: 0.05em;
+}
+
+/* ============================================================
+   COLOPHON
+   ============================================================ */
+.refs {
+    display: grid;
+    grid-template-columns: 25mm 1fr;
+    gap: 6mm;
+    padding: 2mm 0 1.5mm 0;
+    border-top: 0.3mm solid var(--rule);
+    margin-bottom: 1mm;
+    align-items: start;
+}
+.refs-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 9pt; font-weight: 700;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--shade-7);
+    padding-top: 0.3mm;
+}
+.refs-list {
+    list-style: none;
+    padding: 0; margin: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 8mm;
+    counter-reset: ref;
+    font-family: 'Inter', sans-serif;
+    font-size: 8pt;
+    line-height: 1.42;
+    color: var(--body);
+}
+.refs-list li {
+    position: relative;
+    padding-left: 5mm;
+    counter-increment: ref;
+    break-inside: avoid;
+    margin-bottom: 0.6mm;
+}
+.refs-list li::before {
+    content: "[" counter(ref) "]";
+    position: absolute; left: 0; top: 0;
+    font-weight: 700;
+    color: var(--shade-5);
+}
+.refs-list li em { font-style: italic; color: var(--ink); }
+.refs-list li .mono {
+    font-family: 'SF Mono', 'Menlo', 'Courier New', monospace;
+    font-size: 7.5pt;
+    color: var(--shade-5);
+}
+
+.colophon {
+    border-top: 0.6mm solid var(--ink);
+    padding-top: 1.5mm;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 10mm;
+    align-items: center;
+    font-family: 'Inter', sans-serif;
+    font-size: 8.5pt;
+    color: var(--muted);
+}
+.colophon .left { text-align: left; }
+.colophon .center { text-align: center; }
+.colophon .right { text-align: right; }
+.colophon strong { color: var(--ink); font-weight: 700; }
+.colophon .mark {
+    font-family: 'Charter', Georgia, serif;
+    font-size: 12pt;
+    font-weight: 700;
+    color: var(--blue);
+    letter-spacing: 0.02em;
+}
+
+/* ============================================================
+   PRINT
+   ============================================================ */
+@media print {
+    html, body { width: 841mm; height: 1189mm; }
+}
+
+/* ============================================================
+   SCREEN PREVIEW : auto-fit poster to viewport
+   ============================================================ */
+@media screen {
+    html, body {
+        width: 100%; height: auto; min-height: 100vh;
+        background: #2a2e36;
+        display: flex; align-items: flex-start; justify-content: center;
+        padding: 20px;
+    }
+    .poster {
+        flex: none;
+        transform: scale(var(--zoom, 0.55));
+        transform-origin: top center;
+        margin-bottom: calc(-1189mm * (1 - var(--zoom, 0.55)));
+        box-shadow: 0 0 40px rgba(0,0,0,0.5);
+    }
+}
+</style>
+</head>
+<body>
+<div class="poster">
+
+    <!-- KICKER -->
+    <div class="kicker-row">
+        <span class="left">SLAS Europe 2026 · Lab Automation Track</span>
+        <span class="mid">Reinforcement Learning · MuJoCo · SO-101</span>
+        <span class="right"><img class="kicker-logo" src="figures/imperial-logo.png" alt="Imperial College London"></span>
+    </div>
+
+    <!-- MASTHEAD -->
+    <header class="masthead">
+        <div>
+            <h1 class="title">
+                Democratising lab automation: training affordable robots for precision tasks with <em>reinforcement learning</em>
+            </h1>
+            <div class="byline">
+                <span class="sans author">Natalie Chan</span>
+                <span class="sep">·</span>
+                <span class="sans affil"><strong>Department of Bioengineering</strong><br>Imperial College London</span>
+            </div>
+        </div>
+        <figure class="masthead-img">
+            <img src="figures/fig1.png" alt="MuJoCo simulation of SO-101 robot arm above a petri dish lid">
+            <span class="badge sans">Figure 1</span>
+            <figcaption class="legend">MuJoCo simulation: SO-101 lifting a petri dish lid</figcaption>
+        </figure>
+    </header>
+
+    <!-- ABSTRACT (full-width) -->
+    <section class="section accent-s1 abstract-panel">
+        <div class="sec-head">
+            <span class="num">1</span>
+            <h2 class="title">Abstract</h2>
+        </div>
+        <div class="section-body">
+            <div class="abstract-cols">
+                <p>Laboratory automation can dramatically improve research efficiency, but precision robotic systems remain prohibitively expensive for many facilities. While open-source hardware like the <strong>SO-101</strong> has brought equipment costs down to <strong>under $300</strong>, training these robots for delicate tasks typically requires expensive expert demonstrations and teleoperation setups. This study investigates whether <strong>reinforcement learning (RL)</strong> can train low-cost robots for precision laboratory manipulation using <em>simulation alone</em>, eliminating the need for costly human demonstrations.</p>
+
+                <p>I trained an SO-101 to perform petri-dish lid manipulation using the <strong>Soft Actor-Critic (SAC)</strong> algorithm in MuJoCo physics simulation. The task requires the robot to grasp and lift a petri-dish lid without cracking it, dropping it, or disturbing the dish contents, a deceptively difficult problem involving precise force control and careful contact management. Reward function design was iteratively refined across <strong>15 versions</strong>, balancing intermediate rewards to guide learning while penalising premature gripper closure or excessive force.</p>
+
+                <p>Across over <strong>30 experiments</strong>, agents consistently exhibited <strong>reward hacking</strong> rather than learning functional manipulation. Two primary failure modes emerged: <strong>forceful lid manipulation</strong> inappropriate for delicate labware, and <strong>overly cautious hovering</strong> in locally optimal positions. Only one configuration achieved lid lifting, with a <strong>20% success rate</strong> using forceful manipulation. Training exhibited high instability, with performance collapsing after sparse successes. Additional failures included simulation instabilities from aggressive exploration causing MuJoCo solver failures, and replay-buffer contamination from corrupted states degrading policy performance.</p>
+
+                <p>These findings suggest that applying RL to precision manipulation without prior structure (demonstrations, curriculum learning, or constrained action spaces) presents significant challenges. The thin contact margins of delicate labware create <em>extremely sparse</em> success conditions that pure exploration struggles to discover reliably. Future work will explore <strong>demonstration-augmented RL</strong> for initial behavioural scaffolding, <strong>enlarged collision geometries</strong> to ease contact detection, and <strong>action clipping</strong> to prevent simulation instabilities. Real-robot validation is planned to assess sim-to-real transfer. The ultimate goal remains making precision laboratory automation accessible to facilities that cannot afford traditional robotic systems.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- THREE COLUMNS: Background | Methods | Results -->
+    <div class="columns">
+
+        <!-- COL 1 :: BACKGROUND -->
+        <div class="column">
+            <div class="section accent-s2">
+                <div class="sec-head">
+                    <span class="num">2</span>
+                    <h2 class="title">Background</h2>
+                </div>
+                <div class="section-body">
+                    <p>Laboratory automation could revolutionise bioengineering research, if only it weren&rsquo;t so expensive. Robotic arms precise enough for delicate lab work have traditionally cost <strong>$50,000+</strong>. But the hardware barrier has fallen: open-source designs like the <strong>SO-101</strong> now cost <strong>under $300</strong>.</p>
+
+                    <p>Imagine a future where researchers spend their time on <em>experimental design</em> rather than pipetting, startups run overnight protocols autonomously, and protocols are shared as reproducible <strong>robot policies</strong> instead of ambiguous written instructions.</p>
+
+                    <div class="pullquote">
+                        This isn&rsquo;t about replacing scientists, but giving them back their time to do actual science.
+                        <span class="attrib">Thesis</span>
+                    </div>
+
+                    <p>The remaining challenge is <strong>training</strong>. Unlike traditional imitation learning, which requires expensive human demonstrations, RL agents learn through <em>simulated trial and error</em> over millions of runs.</p>
+
+                    <div class="stats" style="margin: 3mm 0;">
+                        <div class="stat">
+                            <div class="num">$300</div>
+                            <div class="label">SO-101<br>(open hardware)</div>
+                        </div>
+                        <div class="stat">
+                            <div class="num">$50k+</div>
+                            <div class="label">Industrial<br>precision arm</div>
+                        </div>
+                        <div class="stat">
+                            <div class="num">≈166×</div>
+                            <div class="label">Cost<br>reduction</div>
+                        </div>
+                    </div>
+
+                    <div class="research-q">
+                        <div class="rq-label sans">Research question</div>
+                        <div class="rq-text">Can RL teach a low-cost robot to pick up a petri-dish lid without cracking, dropping, or disturbing the contents, using only <em>simulated trial and error</em>?</div>
+                    </div>
+
+                    <h3>Why Soft Actor-Critic</h3>
+                    <p>I implemented <strong>Soft Actor-Critic (SAC)</strong>, an off-policy algorithm chosen over <strong>TD3</strong> because its <em>entropy maximisation</em> provides more principled exploration for contact-rich tasks. The stochastic policy should discover more robust approaches to handle variations in dish positioning.</p>
+
+                    <p>As an <strong>off-policy</strong> method, SAC learns from a replay buffer of past experiences, more sample efficient than on-policy methods like <strong>PPO</strong>. As a <strong>model-free</strong> method, it learns directly from MuJoCo&rsquo;s simulation rather than building a secondary world model.</p>
+
+                    <div class="sac-algo">
+                        <div class="sac-algo-head">SAC update loop · per gradient step</div>
+                        <ol class="sac-algo-list">
+                            <li><strong>Entropy tuning:</strong> α auto-adjusts to maintain target entropy</li>
+                            <li><strong>Critic update:</strong> twin Q-networks; minimum prediction reduces overestimation</li>
+                            <li><strong>Actor update:</strong> maximise Q − α·log π (reward + exploration)</li>
+                            <li><strong>Target update:</strong> Polyak averaging (τ = 0.005) stabilises learning</li>
+                        </ol>
+                    </div>
+
+                    <h3>Task formulation</h3>
+                    <ul>
+                        <li><strong>Observation:</strong> 21-D state vector. Joint positions (6), joint velocities (6), gripper position (3), Euler orientation (3), lid position (3)</li>
+                        <li><strong>Action:</strong> 4-D. X/Y/Z end-effector displacement and a gripper open/close command</li>
+                        <li><strong>Success:</strong> lid grasped, lifted to target height, held stable; dish base within 1 cm of its initial position</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- COL 2 :: METHODS -->
+        <div class="column">
+            <div class="section accent-s3">
+                <div class="sec-head">
+                    <span class="num">3</span>
+                    <h2 class="title">Methods</h2>
+                </div>
+                <div class="section-body">
+                    <p>I forked Gota Gando&rsquo;s <strong>pick-101</strong> repository and adapted it for petri-dish manipulation, using his blog to guide design choices. The codebase uses the SAC implementation from <strong>Stable-Baselines3</strong>.</p>
+
+                    <h3>Simulation setup</h3>
+                    <p>The system uses <strong>MuJoCo</strong> (Google DeepMind), the <strong>SO-101</strong> model from The Robot Studio &amp; Hugging Face, and a petri-dish mesh from GrabCAD which I modified to include collision primitives. Trained on a single RTX 4050 GPU.</p>
+
+                    <p>Gando discovered that mesh-to-mesh collisions are unstable in MuJoCo and added box primitives to the gripper fingertips for stable contact. I built on this with invisible <strong>cylinder primitives</strong> for the petri dish: fingertips contact the cylinders while the visible mesh remains purely visual, improving collision stability.</p>
+
+                    <figure class="fig">
+                        <img src="figures/fig2.png" alt="Collision primitives: gripper fingertips and petri dish">
+                        <figcaption class="fig-caption"><strong>Figure 2.</strong> Visualisation of collision primitives (green and red cylinders) used for physics calculations. The gripper fingertips (purple boxes) contact these invisible primitives while the visible petri-dish mesh remains purely visual.</figcaption>
+                    </figure>
+
+                    <h3>Reward design (v19 → v20)</h3>
+                    <p style="font-size:11pt; line-height:1.34; margin-bottom: 1.5mm;">Following Gando, I started at <strong>v20</strong>, adapting his cube-lifting v19 to petri-dish mechanics:</p>
+                    <ul>
+                        <li>Height alignment to guide precise descent</li>
+                        <li>Contact bonuses for single &amp; bilateral touch</li>
+                        <li>Closing incentive at correct height</li>
+                        <li>Gentle pressure with tolerance bounds</li>
+                        <li>Penalties for dish displacement &amp; gripper jitter</li>
+                        <li>Increased grasp bonus, tighter thresholds</li>
+                    </ul>
+
+                    <h3>Training protocol</h3>
+                    <ul>
+                        <li>500 k steps · 400 k buffer · batch 256 · γ = 0.99 · τ = 0.005 · lr 3 × 10⁻⁴</li>
+                        <li>200&ndash;300 k steps (~2&ndash;3 h), terminated early on reward hacking; clean runs to 500 k (~5 h)</li>
+                        <li>Final setup used the <strong>full task</strong> from initialisation, which produced more robust policies than curriculum stages</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- COL 3 :: RESULTS -->
+        <div class="column">
+            <div class="section accent-s4">
+                <div class="sec-head">
+                    <span class="num">4</span>
+                    <h2 class="title">Results</h2>
+                </div>
+                <div class="section-body">
+                    <p>SAC explored effectively early but quickly stagnated, falling into reward hacking across all experiments. Across <strong>15 reward iterations</strong>, agents consistently exhibited one of two failure modes: <strong>forceful manipulation</strong> that risked damage, or <strong>overly cautious hovering</strong> in locally optimal positions.</p>
+
+                    <figure class="fig">
+                        <img src="figures/fig3.png" alt="Two failure modes: forceful manipulation vs cautious hovering">
+                        <figcaption class="fig-caption"><strong>Figure 3.</strong> Video evaluation at 200 k steps. <strong style="color:var(--shade-4);">Left (v22):</strong> forceful manipulation. <strong style="color:var(--shade-4);">Right (v31):</strong> cautious hovering.</figcaption>
+                    </figure>
+
+                    <h3>Headline outcome</h3>
+                    <div class="stats">
+                        <div class="stat">
+                            <div class="num">1<span style="font-size:16pt; color:var(--muted);">/30+</span></div>
+                            <div class="label">Experiments that<br>lifted the lid</div>
+                        </div>
+                        <div class="stat">
+                            <div class="num">20%</div>
+                            <div class="label">Success rate<br>(v22, forceful)</div>
+                        </div>
+                        <div class="stat">
+                            <div class="num">150k</div>
+                            <div class="label">Step at which<br>runs plateau</div>
+                        </div>
+                    </div>
+
+                    <p>After each sparse success, performance <strong>rapidly collapsed</strong>. Evaluation reward converged to zero despite occasional lifts, suggesting the learned policy was <strong>highly unreliable</strong>. The agent kept hitting local optima due to the tiny margin of error.</p>
+
+                    <figure class="fig pushdown">
+                        <img src="figures/fig4.png" alt="Training curves for v22 and v31">
+                        <figcaption class="fig-caption"><strong>Figure 4.</strong> Corresponding curves on reward v22 (left) and v31 (right).</figcaption>
+                    </figure>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- FAILURE PANEL -->
+    <section class="failure-panel section accent-s5">
+        <div class="sec-head">
+            <span class="num">5</span>
+            <h2 class="title">Reward hacking</h2>
+            <span class="fp-subtitle">Reward versions v23 – v26</span>
+        </div>
+        <div class="fp-body">
+
+        <div class="fp-grid">
+
+            <div class="fp-card">
+                <img class="fp-img" src="figures/fig5-A.png" alt="Reward hacking A: repeated closing without contact">
+                <div class="fp-body">
+                    <div class="fp-letter">A</div>
+                    <div class="fp-tag sans">Reward v23</div>
+                    <div class="fp-title">Repeated closing without contact</div>
+                    <div class="fp-desc">Closes the gripper repeatedly <em>without contacting the lid</em>, triggering the closing-action reward in mid-air.</div>
+                    <div class="fp-fix"><strong>Mitigation</strong>Conditional rewards requiring maintained contact <em>during</em> the close.</div>
+                </div>
+            </div>
+
+            <div class="fp-card">
+                <img class="fp-img" src="figures/fig5-B.png" alt="Reward hacking B: lid-top stable contact">
+                <div class="fp-body">
+                    <div class="fp-letter">B</div>
+                    <div class="fp-tag sans">Reward v24</div>
+                    <div class="fp-title">Lid-top stable contact</div>
+                    <div class="fp-desc">Establishes contact on the <em>lid top</em> but never closes, never lifts. Locally optimal hover earning contact reward indefinitely.</div>
+                    <div class="fp-fix"><strong>Mitigation</strong>Penalise top contact, reward skirt contact, escalate close &amp; lift rewards.</div>
+                </div>
+            </div>
+
+            <div class="fp-card">
+                <img class="fp-img" src="figures/fig5-C.png" alt="Reward hacking C: lid-skirt stable contact">
+                <div class="fp-body">
+                    <div class="fp-letter">C</div>
+                    <div class="fp-tag sans">Reward v25</div>
+                    <div class="fp-title">Lid-skirt stable contact</div>
+                    <div class="fp-desc">Maintains contact on the skirt but still refuses to close or lift, a deeper local optimum than (B), reached from correct geometry.</div>
+                    <div class="fp-fix"><strong>Mitigation</strong>Escalating closing reward, gated on skirt-contact maintenance.</div>
+                </div>
+            </div>
+
+            <div class="fp-card">
+                <img class="fp-img" src="figures/fig5-D.png" alt="Reward hacking D: skirt-contact jittering">
+                <div class="fp-body">
+                    <div class="fp-letter">D</div>
+                    <div class="fp-tag sans">Reward v26</div>
+                    <div class="fp-title">Skirt-contact jittering</div>
+                    <div class="fp-desc">Holds skirt contact while <em>oscillating</em> at high frequency to accumulate time-based reward without productive motion.</div>
+                    <div class="fp-fix"><strong>Mitigation</strong>Smoothness penalties on action variance; clip extreme commands.</div>
+                </div>
+            </div>
+
+        </div>
+
+        <figure class="fp-curves-strip">
+            <div class="strip-grid">
+                <div class="strip-cell"><span class="strip-tag">A · v23</span><img src="figures/fig6-A.png" alt="Training curves A: v23"></div>
+                <div class="strip-cell"><span class="strip-tag">B · v24</span><img src="figures/fig6-B.png" alt="Training curves B: v24"></div>
+                <div class="strip-cell"><span class="strip-tag">C · v25</span><img src="figures/fig6-C.png" alt="Training curves C: v25"></div>
+                <div class="strip-cell"><span class="strip-tag">D · v26</span><img src="figures/fig6-D.png" alt="Training curves D: v26"></div>
+            </div>
+            <figcaption>
+                <strong>Figure 6.</strong> Corresponding training curves for (A) v23, (B) v24, (C) v25, (D) v26. Within each panel: episode reward (top-left), eval reward (top-right), success rate (bottom-left), entropy coefficient (bottom-right).
+            </figcaption>
+        </figure>
+
+        <div class="fp-summary">
+            <div class="label">Pattern · Fig 6</div>
+            <div class="text">
+                All attempts <strong>plateaued by 150 k steps</strong> with logarithmic convergence. Agent B's curve looked promising, but video evaluation revealed the same unproductive top-contact behaviour. <strong>Rising train reward ≠ task is being learned.</strong> Always watch the video.
+            </div>
+        </div>
+        </div>
+    </section>
+
+    <!-- BOTTOM ROW -->
+    <div class="bottom">
+
+        <!-- CONCLUSIONS -->
+        <div class="section accent-s6">
+            <div class="sec-head">
+                <span class="num">6</span>
+                <h2 class="title">Conclusions</h2>
+            </div>
+            <div class="section-body">
+                <p>These results reveal both the <strong>promise</strong> and <strong>fundamental challenges</strong> of RL for delicate manipulation tasks. While v22 demonstrated that the task is learnable in principle, the low success rate, training instability, and forceful execution suggest significant barriers remain before practical deployment.</p>
+
+                <p><strong>Reward shaping</strong> proved particularly challenging. In theory, a well-shaped reward leads to the optimal policy. In practice, effective rewards must:</p>
+                <ul class="principles">
+                    <li>Guide the agent <strong>without over-constraining</strong></li>
+                    <li>Ensure the <strong>final goal dominates</strong> intermediate rewards</li>
+                    <li>Accelerate <strong>convergence</strong> toward the optimal policy</li>
+                </ul>
+
+                <p>The <strong>simulation-to-reality gap</strong> presents a key limitation: in real-world applications the robot would need visual or tactile inputs, while in simulation it received perfect state observation of the dish position and contact detection.</p>
+
+                <p>Despite this challenge, RL offers a <strong>scalable approach</strong> to laboratory automation. Beyond petri dishes, learned policies could handle <strong>pipetting</strong>, <strong>sample transfer</strong>, and <strong>hazardous materials</strong>, reducing accidents and minimising researcher exposure to dangerous substances.</p>
+
+                <div class="pullquote pushdown" style="margin-bottom: 0;">
+                    The potential impact on laboratory safety and productivity, combined with decreasing costs of both robotic hardware and computational resources, makes this a compelling direction for future research.
+                    <span class="attrib">Closing remarks</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- FUTURE DIRECTIONS -->
+        <div class="section accent-s7">
+            <div class="sec-head">
+                <span class="num">7</span>
+                <h2 class="title">Future directions</h2>
+            </div>
+            <div class="section-body">
+                <p>Future work should consider <strong>enlarged collision geometry</strong> or improved curriculum learning, pretraining agents on environments with reduced initial-state noise before introducing full task variability. For more reliable training or safe real-world application, implementing action limits and invalid-state detection would be essential.</p>
+
+                <ul>
+                    <li><strong>Enlarged collision geometry:</strong> the 1.25 mm fingertip vs. 1.5 cm lid is a strict contact-detection bottleneck (Fig 10)</li>
+                    <li><strong>Action clipping &amp; early termination:</strong> keep NaN/Inf states out of the replay buffer</li>
+                    <li><strong>Demonstration-augmented RL:</strong> seed exploration with teleoperated lifts before SAC explores</li>
+                    <li><strong>Real SO-101 validation:</strong> sim-to-real with vision and tactile inputs</li>
+                    <li><strong>Beyond petri dishes:</strong> pipetting, sample transfer, hazardous materials</li>
+                </ul>
+
+                <figure class="fig pushdown" style="margin-top: 2mm;">
+                    <img src="figures/fig10.png" alt="Gripper fingertip box geometry: original vs enlarged">
+                    <figcaption class="fig-caption"><strong>Figure 10.</strong> Gripper fingertip box geometries, original (left) and larger box (right). Green sphere for position visualisation.</figcaption>
+                </figure>
+            </div>
+        </div>
+
+        <!-- QR -->
+        <div class="qr-card">
+            <div class="qr-kicker sans">Read the long-form</div>
+            <div class="qr-title">Scan to read the full <em>article</em> on Medium.</div>
+            <div class="qr-box">
+                <img src="figures/qr.svg" alt="QR code linking to the full Medium article">
+            </div>
+            <div class="qr-foot">
+                <strong>Scan or visit</strong>
+                medium.com/@nataliefwc/<br>
+                democratising-lab-automation
+            </div>
+        </div>
+
+    </div>
+
+    <!-- REFERENCES -->
+    <section class="refs">
+        <div class="refs-label">References</div>
+        <ol class="refs-list">
+            <li>Haarnoja, T. <em>et al.</em> (2018). Soft Actor-Critic: Off-Policy Maximum Entropy Deep Reinforcement Learning. <em>arXiv:1801.01290</em></li>
+            <li>Gando, G. <em>pick-101</em> — original cube-lifting RL framework. <span class="mono">github.com/ggand0/pick-101</span></li>
+            <li>The Robot Studio. SO-ARM100 / SO-101 open-source robotic arm. <span class="mono">github.com/TheRobotStudio/SO-ARM100</span></li>
+            <li>Todorov, E. <em>et al.</em> MuJoCo physics engine. <span class="mono">github.com/google-deepmind/mujoco</span></li>
+            <li>Raffin, A. <em>et al.</em> Stable-Baselines3 — SAC implementation. <span class="mono">stable-baselines3.readthedocs.io</span></li>
+            <li>GrabCAD. Petri dish 87 mm model. <span class="mono">grabcad.com/library/petri-dish-87mm-1</span></li>
+            <li>Gando, G. SO-101 RL blog. <span class="mono">ggando.com/blog/so101-rl-lift</span></li>
+            <li>Adapted code for petri-dish manipulation. <span class="mono">github.com/snowcodeer/pick-101</span></li>
+        </ol>
+    </section>
+
+    <!-- COLOPHON -->
+    <footer class="colophon">
+        <div class="left">
+            <strong>Contact</strong> &nbsp; natalie.chan@imperial.ac.uk &nbsp;·&nbsp; <strong>Code</strong> &nbsp; github.com/snowcodeer/pick-101
+        </div>
+        <div class="center mark">Imperial · Bioengineering</div>
+        <div class="right">SLAS Europe 2026 · Hamburg · Built on the pick-101 framework (Gota Gando)</div>
+    </footer>
+
+</div>
+
+<script>
+// Auto-fit poster to viewport. Override with ?zoom=0.7
+(function () {
+    const params = new URLSearchParams(location.search);
+    const override = parseFloat(params.get('zoom'));
+    function setZoom() {
+        const root = document.documentElement;
+        if (Number.isFinite(override) && override > 0) {
+            root.style.setProperty('--zoom', override);
+            return;
+        }
+        const target = 841 * (96 / 25.4);
+        const fit = (window.innerWidth - 60) / target;
+        root.style.setProperty('--zoom', Math.max(0.2, Math.min(1.0, fit)));
+    }
+    setZoom();
+    window.addEventListener('resize', setZoom);
+})();
+</script>
+
+</body>
+</html>
